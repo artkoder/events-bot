@@ -289,3 +289,45 @@ async def test_scheduler_process_due(tmp_path):
     assert calls[-1][0] == "forwardMessage"
 
     await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_add_button(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    calls = []
+
+    async def dummy(method, data=None):
+        calls.append((method, data))
+        if method == "getChat":
+            return {"ok": True, "result": {"id": -100123}}
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update({
+        "message": {
+            "text": "/addbutton https://t.me/c/123/5 btn https://example.com",
+            "from": {"id": 1},
+        }
+    })
+
+    assert any(c[0] == "editMessageReplyMarkup" for c in calls)
+
+    await bot.handle_update({
+        "message": {
+            "text": "/addbutton https://t.me/c/123/5 ask locals https://example.com",
+            "from": {"id": 1},
+        }
+    })
+
+    # check that button text with spaces is parsed correctly
+    edit_calls = [c for c in calls if c[0] == "editMessageReplyMarkup"]
+    assert len(edit_calls) == 2
+    payload = edit_calls[-1][1]
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["text"] == "ask locals"
+
+    await bot.close()

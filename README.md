@@ -11,6 +11,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - User lists show clickable usernames for easy profile access.
 - Local timezone support for scheduling.
 - Configurable scheduler interval.
+- Add inline buttons to existing posts.
 
 
 ## Commands
@@ -24,6 +25,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /scheduled - show scheduled posts with target channel names
 - /history - recent posts
 - /tz <offset> - set timezone offset (e.g., +02:00)
+- /addbutton <post_url> <text> <url> - add inline button to existing post (button text may contain spaces)
 
 ## User Stories
 
@@ -35,7 +37,8 @@ This bot allows authorized users to schedule posts to their Telegram channels.
   inline approval buttons.
 - **US-4**: Channel listener events and `/channels` command.
 - **US-5**: Post scheduling interface with channel selection, cancellation and rescheduling. Scheduled list shows the post preview or link along with the target channel name and time in HH:MM DD.MM.YYYY format.
- - **US-6**: Scheduler forwards queued posts at the correct local time. If forwarding fails because the bot is not a member, it falls back to copying. Interval is configurable and all actions are logged.
+- **US-6**: Scheduler forwards queued posts at the correct local time. If forwarding fails because the bot is not a member, it falls back to copying. Interval is configurable and all actions are logged.
+- **US-8**: `/addbutton <post_url> <text> <url>` adds an inline button to an existing channel post. Update logged with INFO level.
 
 ### In Progress
 - **US-7**: Logging of all operations.

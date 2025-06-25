@@ -5,6 +5,7 @@ import os
 import sqlite3
 from datetime import datetime, date, timedelta, timezone
 import contextlib
+import re
 
 from aiohttp import web, ClientSession
 
@@ -225,6 +226,18 @@ class Bot:
     def is_superadmin(self, user_id):
         row = self.get_user(user_id)
         return row and row['is_superadmin']
+
+    async def parse_post_url(self, url: str) -> tuple[int, int] | None:
+        """Return chat_id and message_id from a Telegram post URL."""
+        m = re.search(r"/c/(\d+)/(\d+)", url)
+        if m:
+            return int(f"-100{m.group(1)}"), int(m.group(2))
+        m = re.search(r"t.me/([^/]+)/(\d+)", url)
+        if m:
+            resp = await self.api_request('getChat', {'chat_id': f"@{m.group(1)}"})
+            if resp.get('ok'):
+                return resp['result']['id'], int(m.group(2))
+        return None
 
     async def handle_message(self, message):
         text = message.get('text', '')
@@ -475,6 +488,37 @@ class Bot:
                     'text': f"{r['id']}: {target} at {self.format_time(r['publish_time'], offset)}",
                     'reply_markup': keyboard
                 })
+            return
+
+        if text.startswith('/addbutton'):
+            if not self.is_authorized(user_id):
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Not authorized'})
+                return
+            parts = text.split()
+            if len(parts) < 4:
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': 'Usage: /addbutton <post_url> <text> <url>'
+                })
+                return
+            parsed = await self.parse_post_url(parts[1])
+            if not parsed:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid post URL'})
+                return
+            chat_id, msg_id = parsed
+            keyboard_text = " ".join(parts[2:-1])
+            keyboard = {'inline_keyboard': [[{'text': keyboard_text, 'url': parts[-1]}]]}
+            resp = await self.api_request('editMessageReplyMarkup', {
+                'chat_id': chat_id,
+                'message_id': msg_id,
+                'reply_markup': keyboard
+            })
+            if resp.get('ok'):
+                logging.info('Updated message %s with button', msg_id)
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Button added'})
+            else:
+                logging.error('Failed to add button to %s: %s', msg_id, resp)
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to add button'})
             return
 
         # handle time input for scheduling
