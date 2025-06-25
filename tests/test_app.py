@@ -317,6 +317,7 @@ async def test_add_button(tmp_path):
 
     assert any(c[0] == "editMessageReplyMarkup" for c in calls)
 
+
     await bot.handle_update({
         "message": {
             "text": "/addbutton https://t.me/c/123/5 ask locals https://example.com",
