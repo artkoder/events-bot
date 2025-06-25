@@ -11,7 +11,6 @@ from aiohttp import web, ClientSession
 logging.basicConfig(level=logging.INFO)
 
 DB_PATH = os.getenv("DB_PATH", "bot.db")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://telegram-post-scheduler.fly.dev")
 TZ_OFFSET = os.getenv("TZ_OFFSET", "+00:00")
 SCHED_INTERVAL_SEC = int(os.getenv("SCHED_INTERVAL_SEC", "30"))
 
@@ -726,7 +725,9 @@ def create_app():
 
     app.router.add_post('/webhook', handle_webhook)
 
-    webhook_base = WEBHOOK_URL
+    webhook_base = os.getenv("WEBHOOK_URL")
+    if not webhook_base:
+        raise RuntimeError("WEBHOOK_URL not found in environment variables")
 
     async def start_background(app: web.Application):
         logging.info("Application startup")

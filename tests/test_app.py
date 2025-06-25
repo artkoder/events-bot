@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from main import create_app, Bot
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "dummy")
+os.environ.setdefault("WEBHOOK_URL", "https://example.com")
 
 @pytest.mark.asyncio
 async def test_startup_cleanup():
