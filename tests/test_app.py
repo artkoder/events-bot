@@ -332,3 +332,31 @@ async def test_add_button(tmp_path):
     assert payload["reply_markup"]["inline_keyboard"][0][0]["text"] == "ask locals"
 
     await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_delete_button(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    calls = []
+
+    async def dummy(method, data=None):
+        calls.append((method, data))
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update({
+        "message": {
+            "text": "/delbutton https://t.me/c/123/5",
+            "from": {"id": 1},
+        }
+    })
+
+    assert calls[-1][0] == "editMessageReplyMarkup"
+    assert calls[-1][1]["reply_markup"] == {}
+
+    await bot.close()

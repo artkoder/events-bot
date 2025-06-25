@@ -525,6 +525,37 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to add button'})
             return
 
+        if text.startswith('/delbutton'):
+            if not self.is_authorized(user_id):
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Not authorized'})
+                return
+
+            parts = text.split()
+            if len(parts) != 2:
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': 'Usage: /delbutton <post_url>'
+                })
+                return
+            parsed = await self.parse_post_url(parts[1])
+            if not parsed:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid post URL'})
+                return
+            chat_id, msg_id = parsed
+
+            resp = await self.api_request('editMessageReplyMarkup', {
+                'chat_id': chat_id,
+                'message_id': msg_id,
+                'reply_markup': {}
+            })
+            if resp.get('ok'):
+                logging.info('Removed buttons from message %s', msg_id)
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Button removed'})
+            else:
+                logging.error('Failed to remove button from %s: %s', msg_id, resp)
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to remove button'})
+            return
+
         # handle time input for scheduling
         if user_id in self.pending and 'await_time' in self.pending[user_id]:
             time_str = text.strip()
