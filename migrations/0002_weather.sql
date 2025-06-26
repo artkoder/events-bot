@@ -6,21 +6,23 @@ CREATE TABLE IF NOT EXISTS cities (
     UNIQUE(name)
 );
 
-CREATE TABLE IF NOT EXISTS weather_cache (
-    id INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS weather_cache_day (
     city_id INTEGER NOT NULL,
-    fetched_at DATETIME NOT NULL,
-    provider TEXT NOT NULL,
-    period TEXT NOT NULL,
-    temp REAL,
-    wmo_code INTEGER,
-
-    wind REAL
-
+    day DATE NOT NULL,
+    temperature REAL,
+    weather_code INTEGER,
+    wind_speed REAL,
+    PRIMARY KEY (city_id, day)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS weather_cache_day
-    ON weather_cache(city_id, period, DATE(fetched_at));
+CREATE TABLE IF NOT EXISTS weather_cache_hour (
+    city_id INTEGER NOT NULL,
+    timestamp DATETIME NOT NULL,
+    temperature REAL,
+    weather_code INTEGER,
+    wind_speed REAL,
+    PRIMARY KEY (city_id, timestamp)
+);
 
 
 CREATE TABLE IF NOT EXISTS weather_posts (
