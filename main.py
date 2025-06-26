@@ -614,7 +614,9 @@ class Bot:
                 keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'city_del:{r["id"]}'}]]}
                 await self.api_request('sendMessage', {
                     'chat_id': user_id,
-                    'text': f"{r['id']}: {r['name']} ({r['lat']:.2f}, {r['lon']:.2f})",
+
+                    'text': f"{r['id']}: {r['name']} ({r['lat']:.6f}, {r['lon']:.6f})",
+
                     'reply_markup': keyboard
                 })
             return
