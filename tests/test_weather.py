@@ -224,11 +224,13 @@ async def test_register_weather_post(tmp_path):
     assert any(c[0] == "editMessageText" for c in api_calls)
 
     await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
+
     assert api_calls[-2][0] == "editMessageText"
     msg = api_calls[-1]
     assert msg[0] == "sendMessage"
     assert "https://t.me/c/123/5" in msg[1]["text"]
     assert "15.0" in msg[1]["text"]
+
 
     await bot.close()
 

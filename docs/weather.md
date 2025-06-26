@@ -31,6 +31,7 @@ no further requests are made for that city until the next scheduled hour.
   displaying results.
 - `/regweather <post_url> <template>` – register a channel post for automatic
   weather updates. The template may include placeholders like
+
   `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Sea
   temperature will be available later as `{<city_id>|seatemperature}`.
 - `/weatherposts` – list registered weather posts. Append `update` to refresh all
@@ -43,6 +44,7 @@ Placeholders are replaced with cached values when updating posts. If no data is
 available the post is left unchanged and a log entry is written. The rendered
 header is prepended to the original text separated by the `∙` character for
 reliable replacement on each update.
+
 
 
 

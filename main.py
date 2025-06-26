@@ -443,11 +443,13 @@ class Bot:
             logging.info("%s", e)
             return None
 
+
     @staticmethod
     def post_url(chat_id: int, message_id: int) -> str:
         if str(chat_id).startswith("-100"):
             return f"https://t.me/c/{str(chat_id)[4:]}/{message_id}"
         return f"https://t.me/{chat_id}/{message_id}"
+
 
     async def update_weather_posts(self, cities: set[int] | None = None):
         """Update all registered posts using cached weather."""
@@ -462,11 +464,13 @@ class Bot:
             header = self._render_template(r["template"])
             if header is None:
                 continue
+
             text = (
                 f"{header}{WEATHER_SEPARATOR}{r['base_text']}"
                 if r["base_text"]
                 else header
             )
+
             resp = await self.api_request(
                 "editMessageText",
                 {
@@ -919,6 +923,8 @@ class Bot:
                 'text': 'Weather post registered'
             })
             return
+
+
 
 
         # handle time input for scheduling
