@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from datetime import datetime, timedelta
 import pytest
 
@@ -181,8 +182,8 @@ async def test_weather_retry_logic(tmp_path):
     await bot.collect_weather()
     assert count == 2
 
-    # after an hour allowed again
-    bot.failed_fetches[1] = (3, datetime.utcnow() - timedelta(hours=1, minutes=1))
+    # after thirty minutes allowed again
+    bot.failed_fetches[1] = (3, datetime.utcnow() - timedelta(minutes=31))
     await bot.collect_weather()
     assert count == 3
 
@@ -197,7 +198,16 @@ async def test_register_weather_post(tmp_path):
     async def dummy(method, data=None):
         api_calls.append((method, data))
         if method == "forwardMessage":
-            return {"ok": True, "result": {"message_id": 99, "text": "orig"}}
+
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "text": "orig",
+                    "reply_markup": {"inline_keyboard": [[{"text": "b", "url": "u"}]]},
+                },
+            }
+
         return {"ok": True, "result": {"message_id": 1}}
 
     bot.api_request = dummy  # type: ignore
@@ -216,7 +226,7 @@ async def test_register_weather_post(tmp_path):
 
 
     cur = bot.db.execute(
-        "SELECT chat_id, message_id, template, base_text, base_caption FROM weather_posts"
+        "SELECT chat_id, message_id, template, base_text, base_caption, reply_markup FROM weather_posts"
     )
 
     row = cur.fetchone()
@@ -225,13 +235,14 @@ async def test_register_weather_post(tmp_path):
     assert row["base_text"] == "orig"
 
     assert row["base_caption"] is None
-
+    assert json.loads(row["reply_markup"])["inline_keyboard"][0][0]["text"] == "b"
 
     await bot.collect_weather()
     assert any(c[0] == "editMessageText" for c in api_calls)
+    payload = [c[1] for c in api_calls if c[0] == "editMessageText"][0]
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"] == "u"
 
     await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
-
 
     assert api_calls[-2][0] == "editMessageText"
     msg = api_calls[-1]
@@ -252,7 +263,16 @@ async def test_register_weather_post_caption(tmp_path):
     async def dummy(method, data=None):
         api_calls.append((method, data))
         if method == "forwardMessage":
-            return {"ok": True, "result": {"message_id": 99, "caption": "orig cap"}}
+
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "caption": "orig cap",
+                    "reply_markup": {"inline_keyboard": [[{"text": "b2", "url": "u2"}]]},
+                },
+            }
+
         return {"ok": True, "result": {"message_id": 1}}
 
     bot.api_request = dummy  # type: ignore
@@ -270,14 +290,20 @@ async def test_register_weather_post_caption(tmp_path):
     await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
 
     cur = bot.db.execute(
-        "SELECT base_text, base_caption FROM weather_posts"
+
+        "SELECT base_text, base_caption, reply_markup FROM weather_posts"
+
     )
     row = cur.fetchone()
     assert row["base_text"] is None
     assert row["base_caption"] == "orig cap"
 
+    assert json.loads(row["reply_markup"])["inline_keyboard"][0][0]["text"] == "b2"
+
     await bot.collect_weather()
     assert any(c[0] == "editMessageCaption" for c in api_calls)
+    payload = [c[1] for c in api_calls if c[0] == "editMessageCaption"][0]
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"] == "u2"
 
 
     await bot.close()

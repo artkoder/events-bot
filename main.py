@@ -103,6 +103,7 @@ CREATE_TABLES = [
             base_text TEXT,
 
             base_caption TEXT,
+            reply_markup TEXT,
 
             UNIQUE(chat_id, message_id)
         )""",
@@ -127,6 +128,7 @@ class Bot:
             ("weather_posts", "base_text"),
 
             ("weather_posts", "base_caption"),
+            ("weather_posts", "reply_markup"),
 
         ):
             cur = self.db.execute(f"PRAGMA table_info({table})")
@@ -220,13 +222,13 @@ class Bot:
                 attempts, last_attempt = self.failed_fetches.get(c["id"], (0, datetime.min))
 
                 if not force:
-                    if last_success > now - timedelta(hours=1):
+                    if last_success > now - timedelta(minutes=30):
                         continue
-                    if attempts >= 3 and (now - last_attempt) < timedelta(hours=1):
+                    if attempts >= 3 and (now - last_attempt) < timedelta(minutes=30):
                         continue
                     if attempts > 0 and (now - last_attempt) < timedelta(minutes=1):
                         continue
-                    if attempts >= 3 and (now - last_attempt) >= timedelta(hours=1):
+                    if attempts >= 3 and (now - last_attempt) >= timedelta(minutes=30):
                         attempts = 0
 
                 data = await self.fetch_open_meteo(c["lat"], c["lon"])
@@ -452,7 +454,6 @@ class Bot:
             return None
 
 
-
     @staticmethod
     def post_url(chat_id: int, message_id: int) -> str:
         if str(chat_id).startswith("-100"):
@@ -463,7 +464,7 @@ class Bot:
     async def update_weather_posts(self, cities: set[int] | None = None):
         """Update all registered posts using cached weather."""
         cur = self.db.execute(
-            "SELECT id, chat_id, message_id, template, base_text, base_caption FROM weather_posts"
+            "SELECT id, chat_id, message_id, template, base_text, base_caption, reply_markup FROM weather_posts"
 
         )
         rows = cur.fetchall()
@@ -475,15 +476,20 @@ class Bot:
             if header is None:
                 continue
 
+            markup = json.loads(r["reply_markup"]) if r["reply_markup"] else None
             if r["base_caption"]:
                 caption = f"{header}{WEATHER_SEPARATOR}{r['base_caption']}"
+                payload = {
+                    "chat_id": r["chat_id"],
+                    "message_id": r["message_id"],
+                    "caption": caption,
+                }
+                if markup:
+                    payload["reply_markup"] = markup
                 resp = await self.api_request(
                     "editMessageCaption",
-                    {
-                        "chat_id": r["chat_id"],
-                        "message_id": r["message_id"],
-                        "caption": caption,
-                    },
+                    payload,
+
                 )
             else:
                 text = (
@@ -491,13 +497,18 @@ class Bot:
                     if r["base_text"]
                     else header
                 )
+
+                payload = {
+                    "chat_id": r["chat_id"],
+                    "message_id": r["message_id"],
+                    "text": text,
+                }
+                if markup:
+                    payload["reply_markup"] = markup
                 resp = await self.api_request(
                     "editMessageText",
-                    {
-                        "chat_id": r["chat_id"],
-                        "message_id": r["message_id"],
-                        "text": text,
-                    },
+                    payload,
+
                 )
             if resp.get("ok"):
                 logging.info("Updated weather post %s", r["id"])
@@ -936,12 +947,15 @@ class Bot:
 
             base_text = resp['result'].get('text')
             base_caption = resp['result'].get('caption')
+            markup = resp['result'].get('reply_markup')
+
             if base_text is None and base_caption is None:
                 base_text = ''
             await self.api_request('deleteMessage', {'chat_id': user_id, 'message_id': resp['result']['message_id']})
             self.db.execute(
-                'INSERT OR REPLACE INTO weather_posts (chat_id, message_id, template, base_text, base_caption) VALUES (?, ?, ?, ?, ?)',
-                (chat_id, msg_id, template, base_text, base_caption)
+
+                'INSERT OR REPLACE INTO weather_posts (chat_id, message_id, template, base_text, base_caption, reply_markup) VALUES (?, ?, ?, ?, ?, ?)',
+                (chat_id, msg_id, template, base_text, base_caption, json.dumps(markup) if markup else None)
 
             )
             self.db.commit()

@@ -2,9 +2,8 @@
 
 This document describes the weather feature set for the Telegram scheduler bot.
 
-Weather for each city is queried from the Open-Meteo API approximately once per
-
-hour and stored in the `weather_cache` table. The bot logs both the raw HTTP
+Weather for each city is queried from the Open-Meteo API approximately every 30
+minutes and stored in the `weather_cache` table. The bot logs both the raw HTTP
 response and the parsed weather information. The request looks like:
 
 ```
@@ -13,7 +12,7 @@ https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=te
 
 The bot continues working even if a query fails. When a request fails, it is
 retried up to three times with a one‑minute pause between attempts. After that,
-no further requests are made for that city until the next scheduled hour.
+no further requests are made for that city until the next scheduled half hour.
 
 
 
@@ -89,6 +88,7 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     base_text TEXT,
 
     base_caption TEXT,
+    reply_markup TEXT,
 
     UNIQUE(chat_id, message_id)
 );
