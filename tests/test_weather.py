@@ -70,15 +70,18 @@ async def test_collect_and_report_weather(tmp_path):
 
     await bot.collect_weather()
 
+
     cur = bot.db.execute("SELECT temperature, weather_code FROM weather_cache_hour WHERE city_id=1")
     row = cur.fetchone()
     assert row and row["temperature"] == 10.0 and row["weather_code"] == 1
+
 
     await bot.handle_update({"message": {"text": "/weather", "from": {"id": 1}}})
     assert api_calls[-1][0] == "sendMessage"
     assert "Paris" in api_calls[-1][1]["text"]
 
     await bot.close()
+
 
 
 @pytest.mark.asyncio
@@ -184,3 +187,4 @@ async def test_weather_retry_logic(tmp_path):
     assert count == 3
 
     await bot.close()
+

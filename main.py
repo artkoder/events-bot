@@ -158,11 +158,14 @@ class Bot:
     async def fetch_open_meteo(self, lat: float, lon: float) -> dict | None:
         url = (
             "https://api.open-meteo.com/v1/forecast?latitude="
+
             f"{lat}&longitude={lon}&current=temperature_2m,weather_code,wind_speed_10m"
+
         )
         try:
             async with self.session.get(url) as resp:
                 text = await resp.text()
+
         except Exception:
             logging.exception("Failed to fetch weather")
             return None
@@ -189,15 +192,18 @@ class Bot:
         return data
 
     async def collect_weather(self, force: bool = False):
+
         cur = self.db.execute("SELECT id, lat, lon FROM cities")
         for c in cur.fetchall():
             try:
                 row = self.db.execute(
+
                     "SELECT timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1",
                     (c["id"],),
                 ).fetchone()
                 now = datetime.utcnow()
                 last_success = datetime.fromisoformat(row["timestamp"]) if row else datetime.min
+
 
                 attempts, last_attempt = self.failed_fetches.get(c["id"], (0, datetime.min))
 
@@ -217,6 +223,7 @@ class Bot:
                     continue
 
                 self.failed_fetches.pop(c["id"], None)
+
                 w = data["current"]
                 ts = datetime.utcnow().replace(microsecond=0).isoformat()
                 day = ts.split("T")[0]
@@ -237,6 +244,7 @@ class Bot:
                     (
                         c["id"],
                         day,
+
                         w.get("temperature_2m"),
                         w.get("weather_code"),
                         w.get("wind_speed_10m"),
@@ -745,9 +753,11 @@ class Bot:
             return
 
         if text.startswith('/weather') and self.is_superadmin(user_id):
+
             parts = text.split(maxsplit=1)
             if len(parts) > 1 and parts[1].lower() == 'now':
                 await self.collect_weather(force=True)
+
             cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
             rows = cur.fetchall()
             if not rows:
@@ -756,6 +766,7 @@ class Bot:
             lines = []
             for r in rows:
                 w = self.db.execute(
+
                     'SELECT temperature, weather_code, wind_speed, timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1',
                     (r['id'],),
                 ).fetchone()
@@ -763,6 +774,7 @@ class Bot:
                     emoji = WMO_EMOJI.get(w['weather_code'], '')
                     lines.append(
                         f"{r['name']}: {w['temperature']:.1f}°C {emoji} wind {w['wind_speed']:.1f} m/s at {w['timestamp']}"
+
                     )
                 else:
                     lines.append(f"{r['name']}: no data")
