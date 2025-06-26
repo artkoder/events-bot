@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS weather_cache (
     period TEXT NOT NULL,
     temp REAL,
     wmo_code INTEGER,
-    wind REAL,
+
+    wind REAL
 
 );
 
