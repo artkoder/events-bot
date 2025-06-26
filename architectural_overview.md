@@ -13,7 +13,7 @@ The database is migrated via SQL files in the `migrations` folder.
 Handles Telegram updates and user commands.
 
 ### 3.2 WeatherService
-Collects current and forecast weather data from Open-Meteo for registered cities. It writes results to `weather_cache` and provides information for post templates.
+Collects current weather data from Open-Meteo for registered cities each hour. Results are stored in `weather_cache` and logged. Failed requests are retried up to three times with a minute pause, after which the service waits until the next hour. The bot ignores API errors so it continues running.
 
 ### 3.3 Webhook
 The HTTP server receives Telegram webhooks.
@@ -32,7 +32,7 @@ The application targets Fly.io free tier and runs a single process.
 - US-10: admin adds a city.
 - US-11: admin views and removes cities.
 - US-12: periodic weather collection from Open-Meteo.
-- US-13: admin requests last weather check info.
+- US-13: admin requests last weather check info and can force an update.
 - US-14: admin registers a weather post for updates.
 - US-15: automatic weather post updates.
 - US-16: admin lists registered posts.
