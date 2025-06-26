@@ -2,6 +2,7 @@
 
 This document describes the weather feature set for the Telegram scheduler bot.
 
+
 ## Commands
 
 - `/addcity <name> <lat> <lon>` – add a city to the database. Only superadmins can
@@ -10,6 +11,7 @@ This document describes the weather feature set for the Telegram scheduler bot.
 - `/cities` – list registered cities. Each entry has an inline *Delete* button that
   removes the city from the list. Coordinates are displayed with six decimal digits
   to reflect the stored precision.
+
 
 ## Database schema
 
@@ -30,11 +32,15 @@ CREATE TABLE IF NOT EXISTS weather_cache (
     period TEXT NOT NULL,
     temp REAL,
     wmo_code INTEGER,
+
     wind REAL
+
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS weather_cache_day
     ON weather_cache(city_id, period, DATE(fetched_at));
+
+
 
 CREATE TABLE IF NOT EXISTS weather_posts (
     id INTEGER PRIMARY KEY,

@@ -28,10 +28,12 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /tz <offset> - set timezone offset (e.g., +02:00)
 - /addbutton <post_url> <text> <url> - add inline button to existing post (button text may contain spaces)
 - /delbutton <post_url> - remove all buttons from an existing post
+
 - /addcity <name> <lat> <lon> - add a city for weather checks (admin, coordinates
   may include six or more decimal places)
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
+
 
 
 ## User Stories

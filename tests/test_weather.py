@@ -30,7 +30,9 @@ async def test_add_list_delete_city(tmp_path):
     await bot.handle_update({"message": {"text": "/cities", "from": {"id": 1}}})
     last = calls[-1]
     assert last[0] == "sendMessage"
+
     assert "48.850000" in last[1]["text"] and "2.350000" in last[1]["text"]
+
     cb = last[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
     cid = int(cb.split(":")[1])
 
