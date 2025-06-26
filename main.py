@@ -60,10 +60,12 @@ CREATE_TABLES = [
             period TEXT NOT NULL,
             temp REAL,
             wmo_code INTEGER,
+
             wind REAL
         )""",
     """CREATE UNIQUE INDEX IF NOT EXISTS weather_cache_day
             ON weather_cache(city_id, period, DATE(fetched_at))""",
+
     """CREATE TABLE IF NOT EXISTS weather_posts (
             id INTEGER PRIMARY KEY,
             chat_id BIGINT NOT NULL,
