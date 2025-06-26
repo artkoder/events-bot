@@ -76,19 +76,22 @@ CREATE_TABLES = [
             lon REAL NOT NULL,
             UNIQUE(name)
         )""",
-    """CREATE TABLE IF NOT EXISTS weather_cache (
-            id INTEGER PRIMARY KEY,
+    """CREATE TABLE IF NOT EXISTS weather_cache_day (
             city_id INTEGER NOT NULL,
-            fetched_at DATETIME NOT NULL,
-            provider TEXT NOT NULL,
-            period TEXT NOT NULL,
-            temp REAL,
-            wmo_code INTEGER,
-
-            wind REAL
+            day DATE NOT NULL,
+            temperature REAL,
+            weather_code INTEGER,
+            wind_speed REAL,
+            PRIMARY KEY (city_id, day)
         )""",
-    """CREATE UNIQUE INDEX IF NOT EXISTS weather_cache_day
-            ON weather_cache(city_id, period, DATE(fetched_at))""",
+    """CREATE TABLE IF NOT EXISTS weather_cache_hour (
+            city_id INTEGER NOT NULL,
+            timestamp DATETIME NOT NULL,
+            temperature REAL,
+            weather_code INTEGER,
+            wind_speed REAL,
+            PRIMARY KEY (city_id, timestamp)
+        )""",
 
     """CREATE TABLE IF NOT EXISTS weather_posts (
             id INTEGER PRIMARY KEY,
@@ -194,12 +197,13 @@ class Bot:
         for c in cur.fetchall():
             try:
                 row = self.db.execute(
-                    "SELECT fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1",
+
+                    "SELECT timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1",
                     (c["id"],),
                 ).fetchone()
-
                 now = datetime.utcnow()
-                last_success = datetime.fromisoformat(row["fetched_at"]) if row else datetime.min
+                last_success = datetime.fromisoformat(row["timestamp"]) if row else datetime.min
+
 
                 attempts, last_attempt = self.failed_fetches.get(c["id"], (0, datetime.min))
 
@@ -221,12 +225,26 @@ class Bot:
                 self.failed_fetches.pop(c["id"], None)
 
                 w = data["current"]
+                ts = datetime.utcnow().replace(microsecond=0).isoformat()
+                day = ts.split("T")[0]
                 self.db.execute(
-                    "INSERT INTO weather_cache (city_id, fetched_at, provider, period, temp, wmo_code, wind) "
-                    "VALUES (?, ?, 'open-meteo', 'current', ?, ?, ?)",
+                    "INSERT OR REPLACE INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed) "
+                    "VALUES (?, ?, ?, ?, ?)",
                     (
                         c["id"],
-                        datetime.utcnow().isoformat(),
+                        ts,
+                        w.get("temperature_2m"),
+                        w.get("weather_code"),
+                        w.get("wind_speed_10m"),
+                    ),
+                )
+                self.db.execute(
+                    "INSERT OR REPLACE INTO weather_cache_day (city_id, day, temperature, weather_code, wind_speed) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        c["id"],
+                        day,
+
                         w.get("temperature_2m"),
                         w.get("weather_code"),
                         w.get("wind_speed_10m"),
@@ -748,13 +766,15 @@ class Bot:
             lines = []
             for r in rows:
                 w = self.db.execute(
-                    'SELECT temp, wmo_code, wind, fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1',
+
+                    'SELECT temperature, weather_code, wind_speed, timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1',
                     (r['id'],),
                 ).fetchone()
                 if w:
-                    emoji = WMO_EMOJI.get(w['wmo_code'], '')
+                    emoji = WMO_EMOJI.get(w['weather_code'], '')
                     lines.append(
-                        f"{r['name']}: {w['temp']:.1f}°C {emoji} wind {w['wind']:.1f} m/s at {w['fetched_at']}"
+                        f"{r['name']}: {w['temperature']:.1f}°C {emoji} wind {w['wind_speed']:.1f} m/s at {w['timestamp']}"
+
                     )
                 else:
                     lines.append(f"{r['name']}: no data")

@@ -70,9 +70,11 @@ async def test_collect_and_report_weather(tmp_path):
 
     await bot.collect_weather()
 
-    cur = bot.db.execute("SELECT temp, wmo_code FROM weather_cache WHERE city_id=1")
+
+    cur = bot.db.execute("SELECT temperature, weather_code FROM weather_cache_hour WHERE city_id=1")
     row = cur.fetchone()
-    assert row and row["temp"] == 10.0 and row["wmo_code"] == 1
+    assert row and row["temperature"] == 10.0 and row["weather_code"] == 1
+
 
     await bot.handle_update({"message": {"text": "/weather", "from": {"id": 1}}})
     assert api_calls[-1][0] == "sendMessage"
@@ -80,6 +82,36 @@ async def test_collect_and_report_weather(tmp_path):
 
     await bot.close()
 
+
+
+@pytest.mark.asyncio
+async def test_weather_upsert(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def fetch1(lat, lon):
+        return {"current": {"temperature_2m": 1.0, "weather_code": 1, "wind_speed_10m": 1.0}}
+
+    async def fetch2(lat, lon):
+        return {"current": {"temperature_2m": 2.0, "weather_code": 1, "wind_speed_10m": 1.0}}
+
+    bot.fetch_open_meteo = fetch1  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'Paris', 48.85, 2.35)")
+    bot.db.commit()
+
+    await bot.collect_weather()
+
+    bot.fetch_open_meteo = fetch2  # type: ignore
+    await bot.collect_weather()
+
+    cur = bot.db.execute("SELECT temperature FROM weather_cache_day WHERE city_id=1")
+    row = cur.fetchone()
+    assert row and row["temperature"] == 2.0
+
+    await bot.close()
 
 
 @pytest.mark.asyncio
