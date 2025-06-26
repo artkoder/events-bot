@@ -38,6 +38,8 @@ WMO_EMOJI = {
     99: "\u26c8\ufe0f",
 }
 
+WEATHER_SEPARATOR = "\u2219"  # "∙" used to split header from original text
+
 
 CREATE_TABLES = [
     """CREATE TABLE IF NOT EXISTS users (
@@ -441,6 +443,14 @@ class Bot:
             logging.info("%s", e)
             return None
 
+
+    @staticmethod
+    def post_url(chat_id: int, message_id: int) -> str:
+        if str(chat_id).startswith("-100"):
+            return f"https://t.me/c/{str(chat_id)[4:]}/{message_id}"
+        return f"https://t.me/{chat_id}/{message_id}"
+
+
     async def update_weather_posts(self, cities: set[int] | None = None):
         """Update all registered posts using cached weather."""
         cur = self.db.execute(
@@ -454,7 +464,13 @@ class Bot:
             header = self._render_template(r["template"])
             if header is None:
                 continue
-            text = f"{header}\n{r['base_text']}" if r["base_text"] else header
+
+            text = (
+                f"{header}{WEATHER_SEPARATOR}{r['base_text']}"
+                if r["base_text"]
+                else header
+            )
+
             resp = await self.api_request(
                 "editMessageText",
                 {
@@ -820,6 +836,29 @@ class Bot:
                 })
             return
 
+        if text.startswith('/weatherposts') and self.is_superadmin(user_id):
+            parts = text.split(maxsplit=1)
+            force = len(parts) > 1 and parts[1] == 'update'
+            if force:
+                await self.update_weather_posts()
+            cur = self.db.execute(
+                'SELECT chat_id, message_id, template FROM weather_posts ORDER BY id'
+            )
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather posts'})
+                return
+            lines = []
+            for r in rows:
+                header = self._render_template(r['template'])
+                url = self.post_url(r['chat_id'], r['message_id'])
+                if header:
+                    lines.append(f"{url} {header}")
+                else:
+                    lines.append(f"{url} no data")
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
+            return
+
         if text.startswith('/weather') and self.is_superadmin(user_id):
 
             parts = text.split(maxsplit=1)
@@ -885,20 +924,8 @@ class Bot:
             })
             return
 
-        if text.startswith('/weatherposts') and self.is_superadmin(user_id):
-            parts = text.split(maxsplit=1)
-            if len(parts) > 1 and parts[1] == 'update':
-                await self.update_weather_posts()
-            cur = self.db.execute(
-                'SELECT id, chat_id, message_id, template FROM weather_posts ORDER BY id'
-            )
-            rows = cur.fetchall()
-            if not rows:
-                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather posts'})
-                return
-            lines = [f"{r['id']}: {r['chat_id']}/{r['message_id']} -> {r['template']}" for r in rows]
-            await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
-            return
+
+
 
         # handle time input for scheduling
         if user_id in self.pending and 'await_time' in self.pending[user_id]:
