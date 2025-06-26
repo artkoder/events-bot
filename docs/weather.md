@@ -2,9 +2,8 @@
 
 This document describes the weather feature set for the Telegram scheduler bot.
 
-Weather for each city is queried from the Open-Meteo API approximately once per
-
-hour and stored in the `weather_cache` table. The bot logs both the raw HTTP
+Weather for each city is queried from the Open-Meteo API approximately every 30
+minutes and stored in the `weather_cache` table. The bot logs both the raw HTTP
 response and the parsed weather information. The request looks like:
 
 ```
@@ -13,7 +12,7 @@ https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=te
 
 The bot continues working even if a query fails. When a request fails, it is
 retried up to three times with a one‑minute pause between attempts. After that,
-no further requests are made for that city until the next scheduled hour.
+no further requests are made for that city until the next scheduled half hour.
 
 
 
@@ -29,6 +28,21 @@ no further requests are made for that city until the next scheduled hour.
 
   request this information. Append `now` to force a fresh API request before
   displaying results.
+- `/regweather <post_url> <template>` – register a channel post for automatic
+  weather updates. The template may include placeholders like
+  `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Sea
+  temperature will be available later as `{<city_id>|seatemperature}`.
+- `/weatherposts` – list registered weather posts. Append `update` to refresh all
+  posts immediately. Each entry shows the post link followed by the rendered
+  weather header.
+
+### Templates
+
+Placeholders are replaced with cached values when updating posts. If no data is
+available the post is left unchanged and a log entry is written. Posts can be
+plain text or contain media with a caption—the bot will edit either field as
+needed. The rendered header is prepended to the original text or caption
+separated by the `∙` character for reliable replacement on each update.
 
 
 
@@ -67,7 +81,10 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     id INTEGER PRIMARY KEY,
     chat_id BIGINT NOT NULL,
     message_id BIGINT NOT NULL,
-    city_id INTEGER NOT NULL,
+    template TEXT NOT NULL,
+    base_text TEXT,
+    base_caption TEXT,
+    reply_markup TEXT,
     UNIQUE(chat_id, message_id)
 );
 ```
