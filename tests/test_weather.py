@@ -214,22 +214,70 @@ async def test_register_weather_post(tmp_path):
 
     await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
 
-    cur = bot.db.execute("SELECT chat_id, message_id, template, base_text FROM weather_posts")
+
+    cur = bot.db.execute(
+        "SELECT chat_id, message_id, template, base_text, base_caption FROM weather_posts"
+    )
+
     row = cur.fetchone()
     assert row and row["chat_id"] == -100123 and row["message_id"] == 5
     assert row["template"] == "Paris {1|temperature}"
     assert row["base_text"] == "orig"
+
+    assert row["base_caption"] is None
+
 
     await bot.collect_weather()
     assert any(c[0] == "editMessageText" for c in api_calls)
 
     await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
 
+
     assert api_calls[-2][0] == "editMessageText"
     msg = api_calls[-1]
     assert msg[0] == "sendMessage"
     assert "https://t.me/c/123/5" in msg[1]["text"]
     assert "15.0" in msg[1]["text"]
+
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_register_weather_post_caption(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {"ok": True, "result": {"message_id": 99, "caption": "orig cap"}}
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addcity Paris 48.85 2.35", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
+
+    cur = bot.db.execute(
+        "SELECT base_text, base_caption FROM weather_posts"
+    )
+    row = cur.fetchone()
+    assert row["base_text"] is None
+    assert row["base_caption"] == "orig cap"
+
+    await bot.collect_weather()
+    assert any(c[0] == "editMessageCaption" for c in api_calls)
 
 
     await bot.close()

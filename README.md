@@ -15,6 +15,8 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - Remove inline buttons from existing posts.
 - Hourly weather updates from Open-Meteo with the raw response logged. Admins
   can view the latest data or force an update with `/weather now`.
+- Register channel posts with custom templates for automatic weather updates,
+  working with both text and caption posts.
 
 
 ## Commands
