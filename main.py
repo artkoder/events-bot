@@ -155,21 +155,38 @@ class Bot:
     async def fetch_open_meteo(self, lat: float, lon: float) -> dict | None:
         url = (
             "https://api.open-meteo.com/v1/forecast?latitude="
-            f"{lat}&longitude={lon}&current_weather=true"
+
+            f"{lat}&longitude={lon}&current=temperature_2m,weather_code,wind_speed_10m"
+
         )
         try:
             async with self.session.get(url) as resp:
                 text = await resp.text()
-                if resp.status != 200:
-                    logging.error("Open-Meteo HTTP %s: %s", resp.status, text)
-                    return None
-                data = json.loads(text)
+
         except Exception:
             logging.exception("Failed to fetch weather")
             return None
+
+        logging.info("Weather API raw response: %s", text)
+        if resp.status != 200:
+            logging.error("Open-Meteo HTTP %s", resp.status)
+            return None
+        try:
+            data = json.loads(text)
+        except Exception:
+            logging.exception("Invalid weather JSON")
+            return None
+
+        if "current_weather" in data and "current" not in data:
+            cw = data["current_weather"]
+            data["current"] = {
+                "temperature_2m": cw.get("temperature") or cw.get("temperature_2m"),
+                "weather_code": cw.get("weather_code") or cw.get("weathercode"),
+                "wind_speed_10m": cw.get("wind_speed_10m") or cw.get("windspeed"),
+            }
+
         logging.info("Weather response: %s", data.get("current"))
         return data
-
 
     async def collect_weather(self, force: bool = False):
 

@@ -13,6 +13,8 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - Configurable scheduler interval.
 - Add inline buttons to existing posts.
 - Remove inline buttons from existing posts.
+- Hourly weather updates from Open-Meteo with the raw response logged. Admins
+  can view the latest data or force an update with `/weather now`.
 
 
 ## Commands
@@ -51,6 +53,8 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-9**: `/delbutton <post_url>` removes inline buttons from an existing channel post.
 - **US-10**: Admin adds a city with `/addcity`.
 - **US-11**: Admin views and removes cities with `/cities`.
+- **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
+- **US-13**: Admin requests last weather check info and can force an update.
 
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
