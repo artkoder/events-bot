@@ -188,3 +188,44 @@ async def test_weather_retry_logic(tmp_path):
 
     await bot.close()
 
+
+@pytest.mark.asyncio
+async def test_register_weather_post(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {"ok": True, "result": {"message_id": 99, "text": "orig"}}
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addcity Paris 48.85 2.35", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
+
+    cur = bot.db.execute("SELECT chat_id, message_id, template, base_text FROM weather_posts")
+    row = cur.fetchone()
+    assert row and row["chat_id"] == -100123 and row["message_id"] == 5
+    assert row["template"] == "Paris {1|temperature}"
+    assert row["base_text"] == "orig"
+
+    await bot.collect_weather()
+    assert any(c[0] == "editMessageText" for c in api_calls)
+
+    await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
+    assert api_calls[-1][0] == "sendMessage"
+    assert "Paris" in api_calls[-1][1]["text"]
+
+    await bot.close()
+

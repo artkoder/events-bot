@@ -97,7 +97,8 @@ CREATE_TABLES = [
             id INTEGER PRIMARY KEY,
             chat_id BIGINT NOT NULL,
             message_id BIGINT NOT NULL,
-            city_id INTEGER NOT NULL,
+            template TEXT NOT NULL,
+            base_text TEXT,
             UNIQUE(chat_id, message_id)
         )""",
 ]
@@ -117,6 +118,8 @@ class Bot:
             ("users", "tz_offset"),
             ("pending_users", "username"),
             ("rejected_users", "username"),
+            ("weather_posts", "template"),
+            ("weather_posts", "base_text"),
         ):
             cur = self.db.execute(f"PRAGMA table_info({table})")
             names = [r[1] for r in cur.fetchall()]
@@ -193,7 +196,8 @@ class Bot:
 
     async def collect_weather(self, force: bool = False):
 
-        cur = self.db.execute("SELECT id, lat, lon FROM cities")
+        cur = self.db.execute("SELECT id, lat, lon, name FROM cities")
+        updated: set[int] = set()
         for c in cur.fetchall():
             try:
                 row = self.db.execute(
@@ -257,8 +261,11 @@ class Bot:
                     w.get("temperature_2m"),
                     w.get("weather_code"),
                 )
+                updated.add(c["id"])
             except Exception:
                 logging.exception("Error processing weather for city %s", c["id"])
+        if updated:
+            await self.update_weather_posts(updated)
 
     async def handle_update(self, update):
         if 'message' in update:
@@ -399,6 +406,67 @@ class Bot:
             if resp.get('ok'):
                 return resp['result']['id'], int(m.group(2))
         return None
+
+    def _get_cached_weather(self, city_id: int):
+        return self.db.execute(
+            "SELECT temperature, weather_code, wind_speed FROM weather_cache_hour "
+            "WHERE city_id=? ORDER BY timestamp DESC LIMIT 1",
+            (city_id,),
+        ).fetchone()
+
+    def _render_template(self, template: str) -> str | None:
+        """Replace placeholders in template with cached weather values."""
+
+        def repl(match: re.Match[str]) -> str:
+            cid = int(match.group(1))
+            field = match.group(2)
+            row = self._get_cached_weather(cid)
+            if not row:
+                raise ValueError(f"no data for city {cid}")
+            if field == "temperature":
+                emoji = WMO_EMOJI.get(row["weather_code"], "")
+                return f"{emoji} {row['temperature']:.1f}\u00B0C"
+            if field == "wind":
+                return f"{row['wind_speed']:.1f}"
+            if field == "seatemperature":
+                sea = row.get("sea_temperature")
+                if sea is None:
+                    raise ValueError("no sea temperature")
+                return f"{sea:.1f}\u00B0C"
+            return ""
+
+        try:
+            return re.sub(r"{(\d+)\|(\w+)}", repl, template)
+        except ValueError as e:
+            logging.info("%s", e)
+            return None
+
+    async def update_weather_posts(self, cities: set[int] | None = None):
+        """Update all registered posts using cached weather."""
+        cur = self.db.execute(
+            "SELECT id, chat_id, message_id, template, base_text FROM weather_posts"
+        )
+        rows = cur.fetchall()
+        for r in rows:
+            tpl_cities = {int(m.group(1)) for m in re.finditer(r"{(\d+)\|", r["template"])}
+            if cities is not None and not (tpl_cities & cities):
+                continue
+            header = self._render_template(r["template"])
+            if header is None:
+                continue
+            text = f"{header}\n{r['base_text']}" if r["base_text"] else header
+            resp = await self.api_request(
+                "editMessageText",
+                {
+                    "chat_id": r["chat_id"],
+                    "message_id": r["message_id"],
+                    "text": text,
+                },
+            )
+            if resp.get("ok"):
+                logging.info("Updated weather post %s", r["id"])
+            else:
+                logging.error("Failed to update weather post %s: %s", r["id"], resp)
 
     async def handle_message(self, message):
         text = message.get('text', '')
@@ -778,6 +846,57 @@ class Bot:
                     )
                 else:
                     lines.append(f"{r['name']}: no data")
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
+            return
+
+        if text.startswith('/regweather') and self.is_superadmin(user_id):
+            parts = text.split(maxsplit=2)
+            if len(parts) < 3:
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': 'Usage: /regweather <post_url> <template>'
+                })
+                return
+            parsed = await self.parse_post_url(parts[1])
+            if not parsed:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid post URL'})
+                return
+            template = parts[2]
+            chat_id, msg_id = parsed
+            resp = await self.api_request('forwardMessage', {
+                'chat_id': user_id,
+                'from_chat_id': chat_id,
+                'message_id': msg_id
+            })
+            if not resp.get('ok'):
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Cannot read post'})
+                return
+            base_text = resp['result'].get('text', '')
+            await self.api_request('deleteMessage', {'chat_id': user_id, 'message_id': resp['result']['message_id']})
+            self.db.execute(
+                'INSERT OR REPLACE INTO weather_posts (chat_id, message_id, template, base_text) VALUES (?, ?, ?, ?)',
+                (chat_id, msg_id, template, base_text)
+            )
+            self.db.commit()
+            await self.update_weather_posts({int(m.group(1)) for m in re.finditer(r"{(\d+)\|", template)})
+            await self.api_request('sendMessage', {
+                'chat_id': user_id,
+                'text': 'Weather post registered'
+            })
+            return
+
+        if text.startswith('/weatherposts') and self.is_superadmin(user_id):
+            parts = text.split(maxsplit=1)
+            if len(parts) > 1 and parts[1] == 'update':
+                await self.update_weather_posts()
+            cur = self.db.execute(
+                'SELECT id, chat_id, message_id, template FROM weather_posts ORDER BY id'
+            )
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather posts'})
+                return
+            lines = [f"{r['id']}: {r['chat_id']}/{r['message_id']} -> {r['template']}" for r in rows]
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
             return
 

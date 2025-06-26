@@ -55,6 +55,9 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-11**: Admin views and removes cities with `/cities`.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
+- **US-14**: Admin registers a weather post for updates.
+- **US-15**: Automatic weather post updates.
+- **US-16**: Admin lists registered posts.
 
 
 
@@ -62,9 +65,6 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-7**: Logging of all operations.
 
 ### Planned
-- **US-14**: Admin registers a weather post for updates.
-- **US-15**: Automatic weather post updates.
-- **US-16**: Admin lists registered posts.
 
 ## Deployment
 The bot is designed for Fly.io using a webhook on `/webhook` and listens on port `8080`.
