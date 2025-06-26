@@ -28,6 +28,10 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /tz <offset> - set timezone offset (e.g., +02:00)
 - /addbutton <post_url> <text> <url> - add inline button to existing post (button text may contain spaces)
 - /delbutton <post_url> - remove all buttons from an existing post
+- /addcity <name> <lat> <lon> - add a city for weather checks (admin, coordinates
+  may include six or more decimal places)
+- /cities - list cities with inline delete buttons (admin). Coordinates are shown
+  with six decimal places.
 
 
 ## User Stories
@@ -43,12 +47,18 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-6**: Scheduler forwards queued posts at the correct local time. If forwarding fails because the bot is not a member, it falls back to copying. Interval is configurable and all actions are logged.
 - **US-8**: `/addbutton <post_url> <text> <url>` adds an inline button to an existing channel post. Update logged with INFO level.
 - **US-9**: `/delbutton <post_url>` removes inline buttons from an existing channel post.
+- **US-10**: Admin adds a city with `/addcity`.
+- **US-11**: Admin views and removes cities with `/cities`.
 
 ### In Progress
 - **US-7**: Logging of all operations.
 
 ### Planned
-- none
+- **US-12**: Periodic weather collection from Open-Meteo.
+- **US-13**: Admin requests last weather check info.
+- **US-14**: Admin registers a weather post for updates.
+- **US-15**: Automatic weather post updates.
+- **US-16**: Admin lists registered posts.
 
 ## Deployment
 The bot is designed for Fly.io using a webhook on `/webhook` and listens on port `8080`.
