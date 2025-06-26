@@ -56,6 +56,10 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
 
+- **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
+- **US-13**: Admin requests last weather check info and can force an update.
+
+
 ### In Progress
 - **US-7**: Logging of all operations.
 

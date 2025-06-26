@@ -13,7 +13,9 @@ The database is migrated via SQL files in the `migrations` folder.
 Handles Telegram updates and user commands.
 
 ### 3.2 WeatherService
+
 Collects current weather data from Open-Meteo for registered cities each hour using the request `https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,weather_code,wind_speed_10m`. The raw response and parsed data are logged. Failed requests are retried up to three times with a minute pause, after which the service waits until the next hour. The bot ignores API errors so it continues running.
+
 
 ### 3.3 Webhook
 The HTTP server receives Telegram webhooks.

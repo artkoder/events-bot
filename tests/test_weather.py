@@ -81,6 +81,7 @@ async def test_collect_and_report_weather(tmp_path):
     await bot.close()
 
 
+
 @pytest.mark.asyncio
 async def test_weather_now_forces_fetch(tmp_path):
     bot = Bot("dummy", str(tmp_path / "db.sqlite"))
@@ -154,3 +155,4 @@ async def test_weather_retry_logic(tmp_path):
     assert count == 3
 
     await bot.close()
+
