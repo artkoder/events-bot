@@ -29,6 +29,11 @@ no further requests are made for that city until the next scheduled hour.
 
   request this information. Append `now` to force a fresh API request before
   displaying results.
+- `/regweather <post_url> <template>` – register a channel post for automatic
+  weather updates. The template may include placeholders like
+  `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text.
+- `/weatherposts` – list registered weather posts. Append `update` to refresh all
+  posts immediately.
 
 
 
@@ -67,7 +72,8 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     id INTEGER PRIMARY KEY,
     chat_id BIGINT NOT NULL,
     message_id BIGINT NOT NULL,
-    city_id INTEGER NOT NULL,
+    template TEXT NOT NULL,
+    base_text TEXT,
     UNIQUE(chat_id, message_id)
 );
 ```
