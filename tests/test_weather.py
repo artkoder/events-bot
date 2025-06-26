@@ -42,3 +42,39 @@ async def test_add_list_delete_city(tmp_path):
     assert any(c[0] == "editMessageReplyMarkup" for c in calls)
 
     await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_collect_and_report_weather(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 10.0, "weather_code": 1, "wind_speed_10m": 3.0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'Paris', 48.85, 2.35)")
+    bot.db.commit()
+
+    await bot.collect_weather()
+
+    cur = bot.db.execute("SELECT temp, wmo_code FROM weather_cache WHERE city_id=1")
+    row = cur.fetchone()
+    assert row and row["temp"] == 10.0 and row["wmo_code"] == 1
+
+    await bot.handle_update({"message": {"text": "/weather", "from": {"id": 1}}})
+    assert api_calls[-1][0] == "sendMessage"
+    assert "Paris" in api_calls[-1][1]["text"]
+
+    await bot.close()

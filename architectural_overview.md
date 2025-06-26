@@ -13,7 +13,7 @@ The database is migrated via SQL files in the `migrations` folder.
 Handles Telegram updates and user commands.
 
 ### 3.2 WeatherService
-Collects current and forecast weather data from Open-Meteo for registered cities. It writes results to `weather_cache` and provides information for post templates.
+Collects current weather data from Open-Meteo for registered cities each hour. Results are stored in `weather_cache` and logged. The service ignores API errors so the bot continues running.
 
 ### 3.3 Webhook
 The HTTP server receives Telegram webhooks.

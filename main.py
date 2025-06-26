@@ -14,6 +14,30 @@ logging.basicConfig(level=logging.INFO)
 DB_PATH = os.getenv("DB_PATH", "bot.db")
 TZ_OFFSET = os.getenv("TZ_OFFSET", "+00:00")
 SCHED_INTERVAL_SEC = int(os.getenv("SCHED_INTERVAL_SEC", "30"))
+WMO_EMOJI = {
+    0: "\u2600\ufe0f",
+    1: "\U0001F324",
+    2: "\u26c5",
+    3: "\u2601\ufe0f",
+    45: "\U0001F32B",
+    48: "\U0001F32B",
+    51: "\U0001F327",
+    53: "\U0001F327",
+    55: "\U0001F327",
+    61: "\U0001F327",
+    63: "\U0001F327",
+    65: "\U0001F327",
+    71: "\u2744\ufe0f",
+    73: "\u2744\ufe0f",
+    75: "\u2744\ufe0f",
+    80: "\U0001F327",
+    81: "\U0001F327",
+    82: "\U0001F327",
+    95: "\u26c8\ufe0f",
+    96: "\u26c8\ufe0f",
+    99: "\u26c8\ufe0f",
+}
+
 
 CREATE_TABLES = [
     """CREATE TABLE IF NOT EXISTS users (
@@ -126,6 +150,61 @@ class Bot:
             else:
                 logging.info("API call %s succeeded", method)
             return result
+
+    async def fetch_open_meteo(self, lat: float, lon: float) -> dict | None:
+        url = (
+            "https://api.open-meteo.com/v1/forecast?latitude="
+            f"{lat}&longitude={lon}&current_weather=true"
+        )
+        try:
+            async with self.session.get(url) as resp:
+                text = await resp.text()
+                if resp.status != 200:
+                    logging.error("Open-Meteo HTTP %s: %s", resp.status, text)
+                    return None
+                data = json.loads(text)
+        except Exception:
+            logging.exception("Failed to fetch weather")
+            return None
+        logging.info("Weather response: %s", data.get("current"))
+        return data
+
+    async def collect_weather(self):
+        cur = self.db.execute("SELECT id, lat, lon FROM cities")
+        for c in cur.fetchall():
+            try:
+                row = self.db.execute(
+                    "SELECT fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1",
+                    (c["id"],),
+                ).fetchone()
+                if row:
+                    dt = datetime.fromisoformat(row["fetched_at"])
+                    if dt > datetime.utcnow() - timedelta(hours=1):
+                        continue
+                data = await self.fetch_open_meteo(c["lat"], c["lon"])
+                if not data or "current" not in data:
+                    continue
+                w = data["current"]
+                self.db.execute(
+                    "INSERT INTO weather_cache (city_id, fetched_at, provider, period, temp, wmo_code, wind) "
+                    "VALUES (?, ?, 'open-meteo', 'current', ?, ?, ?)",
+                    (
+                        c["id"],
+                        datetime.utcnow().isoformat(),
+                        w.get("temperature_2m"),
+                        w.get("weather_code"),
+                        w.get("wind_speed_10m"),
+                    ),
+                )
+                self.db.commit()
+                logging.info(
+                    "Cached weather for city %s: %s°C code %s",
+                    c["id"],
+                    w.get("temperature_2m"),
+                    w.get("weather_code"),
+                )
+            except Exception:
+                logging.exception("Error processing weather for city %s", c["id"])
 
     async def handle_update(self, update):
         if 'message' in update:
@@ -614,11 +693,31 @@ class Bot:
                 keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'city_del:{r["id"]}'}]]}
                 await self.api_request('sendMessage', {
                     'chat_id': user_id,
-
                     'text': f"{r['id']}: {r['name']} ({r['lat']:.6f}, {r['lon']:.6f})",
-
                     'reply_markup': keyboard
                 })
+            return
+
+        if text.startswith('/weather') and self.is_superadmin(user_id):
+            cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No cities'})
+                return
+            lines = []
+            for r in rows:
+                w = self.db.execute(
+                    'SELECT temp, wmo_code, wind, fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1',
+                    (r['id'],),
+                ).fetchone()
+                if w:
+                    emoji = WMO_EMOJI.get(w['wmo_code'], '')
+                    lines.append(
+                        f"{r['name']}: {w['temp']:.1f}°C {emoji} wind {w['wind']:.1f} m/s at {w['fetched_at']}"
+                    )
+                else:
+                    lines.append(f"{r['name']}: no data")
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
             return
 
         # handle time input for scheduling
@@ -833,6 +932,10 @@ class Bot:
             logging.info("Scheduler loop started")
             while self.running:
                 await self.process_due()
+                try:
+                    await self.collect_weather()
+                except Exception:
+                    logging.exception('Weather collection failed')
                 await asyncio.sleep(SCHED_INTERVAL_SEC)
         except asyncio.CancelledError:
             pass
