@@ -170,7 +170,9 @@ class Bot:
         logging.info("Weather response: %s", data.get("current"))
         return data
 
+
     async def collect_weather(self, force: bool = False):
+
         cur = self.db.execute("SELECT id, lat, lon FROM cities")
         for c in cur.fetchall():
             try:
@@ -178,6 +180,7 @@ class Bot:
                     "SELECT fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1",
                     (c["id"],),
                 ).fetchone()
+
                 now = datetime.utcnow()
                 last_success = datetime.fromisoformat(row["fetched_at"]) if row else datetime.min
 
@@ -199,6 +202,7 @@ class Bot:
                     continue
 
                 self.failed_fetches.pop(c["id"], None)
+
                 w = data["current"]
                 self.db.execute(
                     "INSERT INTO weather_cache (city_id, fetched_at, provider, period, temp, wmo_code, wind) "
@@ -714,9 +718,11 @@ class Bot:
             return
 
         if text.startswith('/weather') and self.is_superadmin(user_id):
+
             parts = text.split(maxsplit=1)
             if len(parts) > 1 and parts[1].lower() == 'now':
                 await self.collect_weather(force=True)
+
             cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
             rows = cur.fetchall()
             if not rows:
