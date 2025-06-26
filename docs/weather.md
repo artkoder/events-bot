@@ -29,6 +29,20 @@ no further requests are made for that city until the next scheduled hour.
 
   request this information. Append `now` to force a fresh API request before
   displaying results.
+- `/regweather <post_url> <template>` – register a channel post for automatic
+  weather updates. The template may include placeholders like
+  `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Sea
+  temperature will be available later as `{<city_id>|seatemperature}`.
+- `/weatherposts` – list registered weather posts. Append `update` to refresh all
+  posts immediately. Each entry shows the post link followed by the rendered
+  weather header.
+
+### Templates
+
+Placeholders are replaced with cached values when updating posts. If no data is
+available the post is left unchanged and a log entry is written. The rendered
+header is prepended to the original text separated by the `∙` character for
+reliable replacement on each update.
 
 
 
@@ -67,7 +81,8 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     id INTEGER PRIMARY KEY,
     chat_id BIGINT NOT NULL,
     message_id BIGINT NOT NULL,
-    city_id INTEGER NOT NULL,
+    template TEXT NOT NULL,
+    base_text TEXT,
     UNIQUE(chat_id, message_id)
 );
 ```
