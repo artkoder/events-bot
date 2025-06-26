@@ -2,6 +2,18 @@
 
 This document describes the weather feature set for the Telegram scheduler bot.
 
+Weather for each city is queried from the Open-Meteo API approximately once per
+hour and stored in the `weather_cache` table. The bot logs both the raw HTTP
+response and the parsed weather information. The request looks like:
+
+```
+https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,weather_code,wind_speed_10m
+```
+
+The bot continues working even if a query fails. When a request fails, it is
+retried up to three times with a one‑minute pause between attempts. After that,
+no further requests are made for that city until the next scheduled hour.
+
 
 ## Commands
 
@@ -11,6 +23,9 @@ This document describes the weather feature set for the Telegram scheduler bot.
 - `/cities` – list registered cities. Each entry has an inline *Delete* button that
   removes the city from the list. Coordinates are displayed with six decimal digits
   to reflect the stored precision.
+- `/weather` – show the last collected weather for all cities. Only superadmins may
+  request this information. Append `now` to force a fresh API request before
+  displaying results.
 
 
 ## Database schema
