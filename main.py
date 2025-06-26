@@ -36,7 +36,7 @@ CREATE_TABLES = [
             chat_id INTEGER PRIMARY KEY,
             title TEXT
         )""",
-    """CREATE TABLE IF NOT EXISTS schedule (
+        """CREATE TABLE IF NOT EXISTS schedule (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             from_chat_id INTEGER,
             message_id INTEGER,
@@ -44,6 +44,31 @@ CREATE_TABLES = [
             publish_time TEXT,
             sent INTEGER DEFAULT 0,
             sent_at TEXT
+        )""",
+    """CREATE TABLE IF NOT EXISTS cities (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            UNIQUE(name)
+        )""",
+    """CREATE TABLE IF NOT EXISTS weather_cache (
+            id INTEGER PRIMARY KEY,
+            city_id INTEGER NOT NULL,
+            fetched_at DATETIME NOT NULL,
+            provider TEXT NOT NULL,
+            period TEXT NOT NULL,
+            temp REAL,
+            wmo_code INTEGER,
+            wind REAL,
+            UNIQUE(city_id, period, DATE(fetched_at))
+        )""",
+    """CREATE TABLE IF NOT EXISTS weather_posts (
+            id INTEGER PRIMARY KEY,
+            chat_id BIGINT NOT NULL,
+            message_id BIGINT NOT NULL,
+            city_id INTEGER NOT NULL,
+            UNIQUE(chat_id, message_id)
         )""",
 ]
 
@@ -556,6 +581,41 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to remove button'})
             return
 
+        if text.startswith('/addcity') and self.is_superadmin(user_id):
+            parts = text.split()
+            if len(parts) == 4:
+                name = parts[1]
+                try:
+                    lat = float(parts[2])
+                    lon = float(parts[3])
+                except ValueError:
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid coordinates'})
+                    return
+                try:
+                    self.db.execute('INSERT INTO cities (name, lat, lon) VALUES (?, ?, ?)', (name, lat, lon))
+                    self.db.commit()
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'City {name} added'})
+                except sqlite3.IntegrityError:
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'City already exists'})
+            else:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Usage: /addcity <name> <lat> <lon>'})
+            return
+
+        if text.startswith('/cities') and self.is_superadmin(user_id):
+            cur = self.db.execute('SELECT id, name, lat, lon FROM cities ORDER BY id')
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No cities'})
+                return
+            for r in rows:
+                keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'city_del:{r["id"]}'}]]}
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': f"{r['id']}: {r['name']} ({r['lat']:.2f}, {r['lon']:.2f})",
+                    'reply_markup': keyboard
+                })
+            return
+
         # handle time input for scheduling
         if user_id in self.pending and 'await_time' in self.pending[user_id]:
             time_str = text.strip()
@@ -705,6 +765,16 @@ class Bot:
             sid = int(data.split(':')[1])
             self.pending[user_id] = {'reschedule_id': sid, 'await_time': True}
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Enter new time'})
+        elif data.startswith('city_del:') and self.is_superadmin(user_id):
+            cid = int(data.split(':')[1])
+            self.db.execute('DELETE FROM cities WHERE id=?', (cid,))
+            self.db.commit()
+            await self.api_request('editMessageReplyMarkup', {
+                'chat_id': query['message']['chat']['id'],
+                'message_id': query['message']['message_id'],
+                'reply_markup': {}
+            })
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'City {cid} deleted'})
         await self.api_request('answerCallbackQuery', {'callback_query_id': query['id']})
 
 
