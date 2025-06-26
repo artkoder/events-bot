@@ -214,24 +214,31 @@ async def test_register_weather_post(tmp_path):
 
     await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
 
+
     cur = bot.db.execute(
         "SELECT chat_id, message_id, template, base_text, base_caption FROM weather_posts"
     )
+
     row = cur.fetchone()
     assert row and row["chat_id"] == -100123 and row["message_id"] == 5
     assert row["template"] == "Paris {1|temperature}"
     assert row["base_text"] == "orig"
+
     assert row["base_caption"] is None
+
 
     await bot.collect_weather()
     assert any(c[0] == "editMessageText" for c in api_calls)
 
     await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
+
+
     assert api_calls[-2][0] == "editMessageText"
     msg = api_calls[-1]
     assert msg[0] == "sendMessage"
     assert "https://t.me/c/123/5" in msg[1]["text"]
     assert "15.0" in msg[1]["text"]
+
 
     await bot.close()
 
@@ -271,6 +278,7 @@ async def test_register_weather_post_caption(tmp_path):
 
     await bot.collect_weather()
     assert any(c[0] == "editMessageCaption" for c in api_calls)
+
 
     await bot.close()
 
