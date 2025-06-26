@@ -121,6 +121,7 @@ class Bot:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
         self.db.commit()
         self.pending = {}
+        self.failed_fetches: dict[int, tuple[int, datetime]] = {}
         self.session: ClientSession | None = None
         self.running = False
 
@@ -169,7 +170,9 @@ class Bot:
         logging.info("Weather response: %s", data.get("current"))
         return data
 
-    async def collect_weather(self):
+
+    async def collect_weather(self, force: bool = False):
+
         cur = self.db.execute("SELECT id, lat, lon FROM cities")
         for c in cur.fetchall():
             try:
@@ -177,13 +180,29 @@ class Bot:
                     "SELECT fetched_at FROM weather_cache WHERE city_id=? ORDER BY fetched_at DESC LIMIT 1",
                     (c["id"],),
                 ).fetchone()
-                if row:
-                    dt = datetime.fromisoformat(row["fetched_at"])
-                    if dt > datetime.utcnow() - timedelta(hours=1):
+
+                now = datetime.utcnow()
+                last_success = datetime.fromisoformat(row["fetched_at"]) if row else datetime.min
+
+                attempts, last_attempt = self.failed_fetches.get(c["id"], (0, datetime.min))
+
+                if not force:
+                    if last_success > now - timedelta(hours=1):
                         continue
+                    if attempts >= 3 and (now - last_attempt) < timedelta(hours=1):
+                        continue
+                    if attempts > 0 and (now - last_attempt) < timedelta(minutes=1):
+                        continue
+                    if attempts >= 3 and (now - last_attempt) >= timedelta(hours=1):
+                        attempts = 0
+
                 data = await self.fetch_open_meteo(c["lat"], c["lon"])
                 if not data or "current" not in data:
+                    self.failed_fetches[c["id"]] = (attempts + 1, now)
                     continue
+
+                self.failed_fetches.pop(c["id"], None)
+
                 w = data["current"]
                 self.db.execute(
                     "INSERT INTO weather_cache (city_id, fetched_at, provider, period, temp, wmo_code, wind) "
@@ -699,6 +718,11 @@ class Bot:
             return
 
         if text.startswith('/weather') and self.is_superadmin(user_id):
+
+            parts = text.split(maxsplit=1)
+            if len(parts) > 1 and parts[1].lower() == 'now':
+                await self.collect_weather(force=True)
+
             cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
             rows = cur.fetchall()
             if not rows:

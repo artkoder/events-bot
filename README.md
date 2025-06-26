@@ -51,8 +51,10 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-9**: `/delbutton <post_url>` removes inline buttons from an existing channel post.
 - **US-10**: Admin adds a city with `/addcity`.
 - **US-11**: Admin views and removes cities with `/cities`.
-- **US-12**: Periodic weather collection from Open-Meteo.
-- **US-13**: Admin requests last weather check info.
+
+- **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
+- **US-13**: Admin requests last weather check info and can force an update.
+
 
 ### In Progress
 - **US-7**: Logging of all operations.
