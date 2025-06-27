@@ -30,10 +30,12 @@ no further requests are made for that city until the next scheduled half hour.
   displaying results.
 - `/regweather <post_url> <template>` – register a channel post for automatic
   weather updates. The template may include placeholders like
+
   `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Sea
   temperature will be available later as `{<city_id>|seatemperature}`. If the
   message already contains a weather header separated by `∙` it will be stripped
   when registering so only the original text remains.
+
 - `/weatherposts` – list registered weather posts. Append `update` to refresh all
   posts immediately. Each entry shows the post link followed by the rendered
   weather header.
@@ -41,10 +43,12 @@ no further requests are made for that city until the next scheduled half hour.
 ### Templates
 
 Placeholders are replaced with cached values when updating posts. If no data is
+
 available the post is left unchanged and a log entry is written. Posts can be
 plain text or contain media with a caption—the bot will edit either field as
 needed. The rendered header is prepended to the original text or caption
 separated by the `∙` character for reliable replacement on each update.
+
 
 
 
@@ -85,8 +89,10 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     message_id BIGINT NOT NULL,
     template TEXT NOT NULL,
     base_text TEXT,
+
     base_caption TEXT,
     reply_markup TEXT,
+
     UNIQUE(chat_id, message_id)
 );
 ```

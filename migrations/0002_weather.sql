@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     message_id BIGINT NOT NULL,
     template TEXT NOT NULL,
     base_text TEXT,
+
     base_caption TEXT,
     reply_markup TEXT,
+
     UNIQUE(chat_id, message_id)
 );
