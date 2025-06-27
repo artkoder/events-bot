@@ -308,3 +308,32 @@ async def test_register_weather_post_caption(tmp_path):
 
     await bot.close()
 
+
+@pytest.mark.asyncio
+async def test_regweather_strips_header(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def dummy(method, data=None):
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "text": "old\u2219orig"
+                },
+            }
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/1/1 t {1|temperature}", "from": {"id": 1}}})
+
+    row = bot.db.execute("SELECT base_text FROM weather_posts").fetchone()
+    assert row["base_text"] == "orig"
+
+
+    await bot.close()
+

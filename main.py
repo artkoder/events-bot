@@ -947,6 +947,10 @@ class Bot:
 
             base_text = resp['result'].get('text')
             base_caption = resp['result'].get('caption')
+            if base_text and WEATHER_SEPARATOR in base_text:
+                base_text = base_text.split(WEATHER_SEPARATOR, 1)[1]
+            if base_caption and WEATHER_SEPARATOR in base_caption:
+                base_caption = base_caption.split(WEATHER_SEPARATOR, 1)[1]
             markup = resp['result'].get('reply_markup')
 
             if base_text is None and base_caption is None:
