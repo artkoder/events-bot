@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS weather_cache_hour (
     temperature REAL,
     weather_code INTEGER,
     wind_speed REAL,
+    is_day INTEGER,
     PRIMARY KEY (city_id, timestamp)
 );
 

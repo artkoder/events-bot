@@ -59,7 +59,7 @@ async def test_collect_and_report_weather(tmp_path):
     bot.api_request = dummy  # type: ignore
 
     async def fetch_dummy(lat, lon):
-        return {"current": {"temperature_2m": 10.0, "weather_code": 1, "wind_speed_10m": 3.0}}
+        return {"current": {"temperature_2m": 10.0, "weather_code": 1, "wind_speed_10m": 3.0, "is_day": 1}}
 
     bot.fetch_open_meteo = fetch_dummy  # type: ignore
 
@@ -90,10 +90,10 @@ async def test_weather_upsert(tmp_path):
     bot = Bot("dummy", str(tmp_path / "db.sqlite"))
 
     async def fetch1(lat, lon):
-        return {"current": {"temperature_2m": 1.0, "weather_code": 1, "wind_speed_10m": 1.0}}
+        return {"current": {"temperature_2m": 1.0, "weather_code": 1, "wind_speed_10m": 1.0, "is_day": 1}}
 
     async def fetch2(lat, lon):
-        return {"current": {"temperature_2m": 2.0, "weather_code": 1, "wind_speed_10m": 1.0}}
+        return {"current": {"temperature_2m": 2.0, "weather_code": 1, "wind_speed_10m": 1.0, "is_day": 1}}
 
     bot.fetch_open_meteo = fetch1  # type: ignore
 
@@ -130,7 +130,7 @@ async def test_weather_now_forces_fetch(tmp_path):
     async def fetch_dummy(lat, lon):
         nonlocal count
         count += 1
-        return {"current": {"temperature_2m": 5.0, "weather_code": 2, "wind_speed_10m": 1.0}}
+        return {"current": {"temperature_2m": 5.0, "weather_code": 2, "wind_speed_10m": 1.0, "is_day": 1}}
 
     bot.fetch_open_meteo = fetch_dummy  # type: ignore
 
@@ -213,7 +213,9 @@ async def test_register_weather_post(tmp_path):
     bot.api_request = dummy  # type: ignore
 
     async def fetch_dummy(lat, lon):
-        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0, "is_day": 1}}
+
 
     bot.fetch_open_meteo = fetch_dummy  # type: ignore
 
@@ -278,7 +280,9 @@ async def test_register_weather_post_caption(tmp_path):
     bot.api_request = dummy  # type: ignore
 
     async def fetch_dummy(lat, lon):
-        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0, "is_day": 1}}
+
 
     bot.fetch_open_meteo = fetch_dummy  # type: ignore
 
@@ -304,7 +308,6 @@ async def test_register_weather_post_caption(tmp_path):
     assert any(c[0] == "editMessageCaption" for c in api_calls)
     payload = [c[1] for c in api_calls if c[0] == "editMessageCaption"][0]
     assert payload["reply_markup"]["inline_keyboard"][0][0]["url"] == "u2"
-
 
     await bot.close()
 
@@ -333,6 +336,42 @@ async def test_regweather_strips_header(tmp_path):
 
     row = bot.db.execute("SELECT base_text FROM weather_posts").fetchone()
     assert row["base_text"] == "orig"
+
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_night_clear_emoji(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 11.0, "weather_code": 0, "wind_speed_10m": 1.0, "is_day": 0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'Night', 0.0, 0.0)")
+    bot.db.commit()
+
+    await bot.collect_weather()
+
+    cur = bot.db.execute("SELECT weather_code, is_day FROM weather_cache_hour WHERE city_id=1")
+    row = cur.fetchone()
+    assert row["weather_code"] == 0 and row["is_day"] == 0
+
+    await bot.handle_update({"message": {"text": "/weather", "from": {"id": 1}}})
+    # last sendMessage should include moon emoji U+1F319
+    assert "\U0001F319" in api_calls[-1][1]["text"]
 
 
     await bot.close()

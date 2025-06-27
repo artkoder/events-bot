@@ -38,6 +38,14 @@ WMO_EMOJI = {
     99: "\u26c8\ufe0f",
 }
 
+
+def weather_emoji(code: int, is_day: int | None) -> str:
+    emoji = WMO_EMOJI.get(code, "")
+    if code == 0 and is_day == 0:
+        return "\U0001F319"  # crescent moon
+    return emoji
+
+
 WEATHER_SEPARATOR = "\u2219"  # "∙" used to split header from original text
 
 
@@ -92,6 +100,7 @@ CREATE_TABLES = [
             temperature REAL,
             weather_code INTEGER,
             wind_speed REAL,
+            is_day INTEGER,
             PRIMARY KEY (city_id, timestamp)
         )""",
 
@@ -171,9 +180,8 @@ class Bot:
     async def fetch_open_meteo(self, lat: float, lon: float) -> dict | None:
         url = (
             "https://api.open-meteo.com/v1/forecast?latitude="
-
-            f"{lat}&longitude={lon}&current=temperature_2m,weather_code,wind_speed_10m"
-
+            f"{lat}&longitude={lon}&current=temperature_2m,weather_code,wind_speed_10m,is_day"
+            "&timezone=auto"
         )
         try:
             async with self.session.get(url) as resp:
@@ -199,6 +207,7 @@ class Bot:
                 "temperature_2m": cw.get("temperature") or cw.get("temperature_2m"),
                 "weather_code": cw.get("weather_code") or cw.get("weathercode"),
                 "wind_speed_10m": cw.get("wind_speed_10m") or cw.get("windspeed"),
+                "is_day": cw.get("is_day"),
             }
 
         logging.info("Weather response: %s", data.get("current"))
@@ -242,14 +251,15 @@ class Bot:
                 ts = datetime.utcnow().replace(microsecond=0).isoformat()
                 day = ts.split("T")[0]
                 self.db.execute(
-                    "INSERT OR REPLACE INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed, is_day) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         c["id"],
                         ts,
                         w.get("temperature_2m"),
                         w.get("weather_code"),
                         w.get("wind_speed_10m"),
+                        w.get("is_day"),
                     ),
                 )
                 self.db.execute(
@@ -419,7 +429,9 @@ class Bot:
 
     def _get_cached_weather(self, city_id: int):
         return self.db.execute(
-            "SELECT temperature, weather_code, wind_speed FROM weather_cache_hour "
+
+            "SELECT temperature, weather_code, wind_speed, is_day FROM weather_cache_hour "
+
             "WHERE city_id=? ORDER BY timestamp DESC LIMIT 1",
             (city_id,),
         ).fetchone()
@@ -434,7 +446,9 @@ class Bot:
             if not row:
                 raise ValueError(f"no data for city {cid}")
             if field == "temperature":
-                emoji = WMO_EMOJI.get(row["weather_code"], "")
+
+                emoji = weather_emoji(row["weather_code"], row.get("is_day"))
+
                 return f"{emoji} {row['temperature']:.1f}\u00B0C"
             if field == "wind":
                 return f"{row['wind_speed']:.1f}"
@@ -907,12 +921,11 @@ class Bot:
             lines = []
             for r in rows:
                 w = self.db.execute(
-
-                    'SELECT temperature, weather_code, wind_speed, timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1',
+                    'SELECT temperature, weather_code, wind_speed, is_day, timestamp FROM weather_cache_hour WHERE city_id=? ORDER BY timestamp DESC LIMIT 1',
                     (r['id'],),
                 ).fetchone()
                 if w:
-                    emoji = WMO_EMOJI.get(w['weather_code'], '')
+                    emoji = weather_emoji(w['weather_code'], w['is_day'])
                     lines.append(
                         f"{r['name']}: {w['temperature']:.1f}°C {emoji} wind {w['wind_speed']:.1f} m/s at {w['timestamp']}"
 

@@ -7,7 +7,7 @@ minutes and stored in the `weather_cache` table. The bot logs both the raw HTTP
 response and the parsed weather information. The request looks like:
 
 ```
-https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,weather_code,wind_speed_10m
+https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,weather_code,wind_speed_10m,is_day&timezone=auto
 ```
 
 The bot continues working even if a query fails. When a request fails, it is
@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS weather_cache_hour (
     temperature REAL,
     weather_code INTEGER,
     wind_speed REAL,
+    is_day INTEGER,
     PRIMARY KEY (city_id, timestamp)
 );
 
@@ -115,7 +116,7 @@ CREATE TABLE IF NOT EXISTS weather_posts (
 
 | Code | Emoji |
 |-----:|:------|
-| 0 | ☀️ |
+| 0 | ☀️ (🌙 at night) |
 | 1 | 🌤 |
 | 2 | ⛅ |
 | 3 | ☁️ |
