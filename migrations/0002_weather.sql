@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS weather_cache_hour (
     temperature REAL,
     weather_code INTEGER,
     wind_speed REAL,
+    is_day INTEGER,
     PRIMARY KEY (city_id, timestamp)
 );
 
@@ -29,6 +30,9 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     id INTEGER PRIMARY KEY,
     chat_id BIGINT NOT NULL,
     message_id BIGINT NOT NULL,
-    city_id INTEGER NOT NULL,
+    template TEXT NOT NULL,
+    base_text TEXT,
+    base_caption TEXT,
+    reply_markup TEXT,
     UNIQUE(chat_id, message_id)
 );
