@@ -38,6 +38,14 @@ WMO_EMOJI = {
     99: "\u26c8\ufe0f",
 }
 
+def weather_emoji(code: int, is_day: int | None) -> str:
+    emoji = WMO_EMOJI.get(code, "")
+    if code == 0 and is_day == 0:
+        return "\U0001F319"  # crescent moon
+    return emoji
+
+WEATHER_SEPARATOR = "\u2219"  # "∙" used to split header from original text
+
 
 def weather_emoji(code: int, is_day: int | None) -> str:
     emoji = WMO_EMOJI.get(code, "")
@@ -447,7 +455,8 @@ class Bot:
                 raise ValueError(f"no data for city {cid}")
             if field == "temperature":
 
-                emoji = weather_emoji(row["weather_code"], row.get("is_day"))
+                is_day = row["is_day"] if "is_day" in row.keys() else None
+                emoji = weather_emoji(row["weather_code"], is_day)
 
                 return f"{emoji} {row['temperature']:.1f}\u00B0C"
             if field == "wind":
