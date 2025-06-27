@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from datetime import datetime, timedelta
 import pytest
 
@@ -181,10 +182,144 @@ async def test_weather_retry_logic(tmp_path):
     await bot.collect_weather()
     assert count == 2
 
-    # after an hour allowed again
-    bot.failed_fetches[1] = (3, datetime.utcnow() - timedelta(hours=1, minutes=1))
+    # after thirty minutes allowed again
+    bot.failed_fetches[1] = (3, datetime.utcnow() - timedelta(minutes=31))
     await bot.collect_weather()
     assert count == 3
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_register_weather_post(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "text": "orig",
+                    "reply_markup": {"inline_keyboard": [[{"text": "b", "url": "u"}]]},
+                },
+            }
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addcity Paris 48.85 2.35", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
+
+    cur = bot.db.execute(
+        "SELECT chat_id, message_id, template, base_text, base_caption, reply_markup FROM weather_posts"
+    )
+    row = cur.fetchone()
+    assert row and row["chat_id"] == -100123 and row["message_id"] == 5
+    assert row["template"] == "Paris {1|temperature}"
+    assert row["base_text"] == "orig"
+    assert row["base_caption"] is None
+    assert json.loads(row["reply_markup"])["inline_keyboard"][0][0]["text"] == "b"
+
+    await bot.collect_weather()
+    assert any(c[0] == "editMessageText" for c in api_calls)
+    payload = [c[1] for c in api_calls if c[0] == "editMessageText"][0]
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"] == "u"
+
+    await bot.handle_update({"message": {"text": "/weatherposts update", "from": {"id": 1}}})
+    assert api_calls[-2][0] == "editMessageText"
+    msg = api_calls[-1]
+    assert msg[0] == "sendMessage"
+    assert "https://t.me/c/123/5" in msg[1]["text"]
+    assert "15.0" in msg[1]["text"]
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_register_weather_post_caption(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "caption": "orig cap",
+                    "reply_markup": {"inline_keyboard": [[{"text": "b2", "url": "u2"}]]},
+                },
+            }
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_dummy(lat, lon):
+        return {"current": {"temperature_2m": 15.0, "weather_code": 1, "wind_speed_10m": 2.0}}
+
+    bot.fetch_open_meteo = fetch_dummy  # type: ignore
+
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addcity Paris 48.85 2.35", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/123/5 Paris {1|temperature}", "from": {"id": 1}}})
+
+    cur = bot.db.execute(
+        "SELECT base_text, base_caption, reply_markup FROM weather_posts"
+    )
+    row = cur.fetchone()
+    assert row["base_text"] is None
+    assert row["base_caption"] == "orig cap"
+    assert json.loads(row["reply_markup"])["inline_keyboard"][0][0]["text"] == "b2"
+
+    await bot.collect_weather()
+    assert any(c[0] == "editMessageCaption" for c in api_calls)
+    payload = [c[1] for c in api_calls if c[0] == "editMessageCaption"][0]
+    assert payload["reply_markup"]["inline_keyboard"][0][0]["url"] == "u2"
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_regweather_strips_header(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def dummy(method, data=None):
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {
+                    "message_id": 99,
+                    "text": "old\u2219orig"
+                },
+            }
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/1/1 t {1|temperature}", "from": {"id": 1}}})
+
+    row = bot.db.execute("SELECT base_text FROM weather_posts").fetchone()
+    assert row["base_text"] == "orig"
 
     await bot.close()
 
