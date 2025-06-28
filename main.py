@@ -720,7 +720,11 @@ class Bot:
         )
         self.db.commit()
 
+        logging.info("Stored asset %s tags=%s", message_id, hashtags)
+
     def next_asset(self, tags: set[str] | None):
+        logging.info("Selecting asset for tags=%s", tags)
+
         cur = self.db.execute(
             "SELECT message_id, hashtags, template FROM asset_images WHERE used_at IS NULL ORDER BY message_id"
         )
@@ -734,6 +738,9 @@ class Bot:
                     (datetime.utcnow().isoformat(), r["message_id"]),
                 )
                 self.db.commit()
+
+                logging.info("Picked asset %s", r["message_id"])
+
                 return r
             if not tagset and first_no_tag is None:
                 first_no_tag = r
@@ -743,19 +750,24 @@ class Bot:
                 (datetime.utcnow().isoformat(), first_no_tag["message_id"]),
             )
             self.db.commit()
+
+            logging.info("Picked asset %s (no tags)", first_no_tag["message_id"])
             return first_no_tag
+        logging.info("No asset available")
         return None
 
 
+    async def publish_weather(self, channel_id: int, tags: set[str] | None = None) -> bool:
 
-
-    async def publish_weather(self, channel_id: int, tags: set[str] | None = None):
         asset = self.next_asset(tags)
         caption = asset["template"] if asset and asset["template"] else ""
         if caption:
             caption = self._render_template(caption) or caption
         if asset and self.asset_channel_id:
-            await self.api_request(
+
+            logging.info("Copying asset %s to %s", asset["message_id"], channel_id)
+            resp = await self.api_request(
+
                 "copyMessage",
                 {
                     "chat_id": channel_id,
@@ -768,17 +780,28 @@ class Bot:
                 "deleteMessage",
                 {"chat_id": self.asset_channel_id, "message_id": asset["message_id"]},
             )
+
+            ok = resp.get("ok", False)
+        elif caption:
+            logging.info("Sending text weather to %s", channel_id)
+            resp = await self.api_request(
+                "sendMessage",
+                {"chat_id": channel_id, "text": caption},
+            )
+            ok = resp.get("ok", False)
         else:
-            if caption:
-                await self.api_request(
-                    "sendMessage",
-                    {"chat_id": channel_id, "text": caption},
-                )
-        self.db.execute(
-            "UPDATE weather_publish_channels SET last_published_at=? WHERE channel_id=?",
-            (datetime.utcnow().isoformat(), channel_id),
-        )
-        self.db.commit()
+            logging.info("No asset and no caption; nothing to publish")
+            return False
+        if ok:
+            self.db.execute(
+                "UPDATE weather_publish_channels SET last_published_at=? WHERE channel_id=?",
+                (datetime.utcnow().isoformat(), channel_id),
+            )
+            self.db.commit()
+        else:
+            logging.error("Failed to publish weather: %s", resp)
+        return ok
+
 
 
     async def handle_message(self, message):
@@ -1470,8 +1493,11 @@ class Bot:
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Asset channel set'})
         elif data.startswith('wrnow:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
-            await self.publish_weather(cid, None)
-            await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Posted'})
+
+            ok = await self.publish_weather(cid, None)
+            msg = 'Posted' if ok else 'No asset to publish'
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': msg})
+
         elif data.startswith('wstop:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
             self.remove_weather_channel(cid)
