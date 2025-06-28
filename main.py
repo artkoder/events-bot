@@ -578,10 +578,9 @@ class Bot:
                 if not row:
                     raise ValueError(f"no sea data for {cid}")
                 emoji = "\U0001F30A"
-                return (
-                    f"{emoji} {row['current']:.1f}\u00B0C "
-                    f"{row['morning']:.1f}/{row['day']:.1f}/{row['evening']:.1f}/{row['night']:.1f}"
-                )
+
+                return f"{emoji} {row['current']:.1f}\u00B0C"
+
 
             row = self._get_cached_weather(cid)
             if not row:

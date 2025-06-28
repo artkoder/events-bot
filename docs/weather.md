@@ -44,7 +44,10 @@ no further requests are made for that city until the next scheduled half hour.
   weather updates. The template may include placeholders like
 
   `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Water
-  temperature can be inserted with `{<sea_id>|seatemperature}`. If the
+
+  temperature can be inserted with `{<sea_id>|seatemperature}` which expands to
+  the sea emoji followed by the current temperature like `🌊 15.1°C`. If the
+
   message already contains a weather header separated by `∙` it will be stripped
   when registering so only the original text remains.
 
