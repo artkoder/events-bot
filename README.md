@@ -16,7 +16,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - Weather updates from Open-Meteo roughly every 30 minutes with the raw response logged. Admins
   can view the latest data or force an update with `/weather now`.
 - Register channel posts with custom templates for automatic weather updates,
-  working with both text and caption posts.
+  including sea temperature, working with both text and caption posts.
 
 
 ## Commands
@@ -35,6 +35,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 
 - /addcity <name> <lat> <lon> - add a city for weather checks (admin, coordinates
   may include six or more decimal places)
+- /addsea <name> <lat> <lon> - add a sea location for water temperature checks
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
 
@@ -57,9 +58,9 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-11**: Admin views and removes cities with `/cities`.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
-- **US-14**: Admin registers a weather post for updates.
-- **US-15**: Automatic weather post updates.
-- **US-16**: Admin lists registered posts.
+- **US-14**: Admin registers a weather post for updates, including sea temperature.
+- **US-15**: Automatic weather post updates with current weather and sea temperature.
+- **US-16**: Admin lists registered posts showing the rendered weather and sea data.
 
 
 
