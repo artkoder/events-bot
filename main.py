@@ -811,6 +811,12 @@ class Bot:
             self.add_asset(message['message_id'], tags, caption)
             return
 
+
+        if 'from' not in message:
+            # ignore channel posts when asset channel is not configured
+            return
+
+
         text = message.get('text', '')
         user_id = message['from']['id']
         username = message['from'].get('username')
