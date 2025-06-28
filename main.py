@@ -149,6 +149,25 @@ CREATE_TABLES = [
             post_time TEXT NOT NULL,
             last_published_at TEXT
         )""",
+
+
+    """CREATE TABLE IF NOT EXISTS weather_cache_period (
+            city_id INTEGER PRIMARY KEY,
+            updated TEXT,
+            morning_temp REAL,
+            morning_code INTEGER,
+            morning_wind REAL,
+            day_temp REAL,
+            day_code INTEGER,
+            day_wind REAL,
+            evening_temp REAL,
+            evening_code INTEGER,
+            evening_wind REAL,
+            night_temp REAL,
+            night_code INTEGER,
+            night_wind REAL
+        )""",
+
 ]
 
 
@@ -221,8 +240,9 @@ class Bot:
     async def fetch_open_meteo(self, lat: float, lon: float) -> dict | None:
         url = (
             "https://api.open-meteo.com/v1/forecast?latitude="
-            f"{lat}&longitude={lon}&current=temperature_2m,weather_code,wind_speed_10m,is_day"
-            "&timezone=auto"
+            f"{lat}&longitude={lon}&current_weather=true"
+            "&hourly=temperature_2m,weather_code,wind_speed_10m,is_day"
+            "&forecast_days=2&timezone=auto"
         )
         try:
             async with self.session.get(url) as resp:
@@ -337,6 +357,50 @@ class Bot:
                         w.get("temperature_2m"),
                         w.get("weather_code"),
                         w.get("wind_speed_10m"),
+                    ),
+                )
+                # parse hourly forecast for tomorrow
+                h = data.get("hourly", {})
+                times = h.get("time") or []
+                temps = h.get("temperature_2m") or []
+                codes = h.get("weather_code") or []
+                winds = h.get("wind_speed_10m") or []
+                tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
+                mt = dt = et = nt = None
+                mc = dc = ec = nc = None
+                mw = dw = ew = nw = None
+                for tstr, temp, code, wind in zip(times, temps, codes, winds):
+                    dt_obj = datetime.fromisoformat(tstr)
+                    if dt_obj.date() != tomorrow:
+                        continue
+                    if dt_obj.hour == 6 and mt is None:
+                        mt, mc, mw = temp, code, wind
+                    elif dt_obj.hour == 12 and dt is None:
+                        dt, dc, dw = temp, code, wind
+                    elif dt_obj.hour == 18 and et is None:
+                        et, ec, ew = temp, code, wind
+                    elif dt_obj.hour == 0 and nt is None:
+                        nt, nc, nw = temp, code, wind
+                    if mt is not None and dt is not None and et is not None and nt is not None:
+                        break
+                self.db.execute(
+                    "INSERT OR REPLACE INTO weather_cache_period (city_id, updated, morning_temp, morning_code, morning_wind, day_temp, day_code, day_wind, evening_temp, evening_code, evening_wind, night_temp, night_code, night_wind) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        c["id"],
+                        now.isoformat(),
+                        mt,
+                        mc,
+                        mw,
+                        dt,
+                        dc,
+                        dw,
+                        et,
+                        ec,
+                        ew,
+                        nt,
+                        nc,
+                        nw,
                     ),
                 )
                 self.db.commit()
@@ -551,10 +615,14 @@ class Bot:
 
     def _get_cached_weather(self, city_id: int):
         return self.db.execute(
-
             "SELECT temperature, weather_code, wind_speed, is_day FROM weather_cache_hour "
-
             "WHERE city_id=? ORDER BY timestamp DESC LIMIT 1",
+            (city_id,),
+        ).fetchone()
+
+    def _get_period_weather(self, city_id: int):
+        return self.db.execute(
+            "SELECT * FROM weather_cache_period WHERE city_id=?",
             (city_id,),
         ).fetchone()
 
@@ -616,13 +684,32 @@ class Bot:
                 return f"{emoji} {row[key]:.1f}\u00B0C"
 
             row = self._get_cached_weather(cid)
-            if not row:
+            period_row = self._get_period_weather(cid) if period else None
+            if not row and not period_row:
                 raise ValueError(f"no data for city {cid}")
-            if field in {"temperature", "temp"}:
+
+            if field in {"temperature", "temp", "wind"}:
+                if period_row and period:
+                    key_map = {
+                        "nm": ("morning_temp", "morning_code", "morning_wind", 1),
+                        "nd": ("day_temp", "day_code", "day_wind", 1),
+                        "ny": ("evening_temp", "evening_code", "evening_wind", 1),
+                        "nn": ("night_temp", "night_code", "night_wind", 0),
+                    }
+                    t_key, c_key, w_key, is_day_val = key_map[period]
+                    if period_row[t_key] is not None:
+                        if field in {"temperature", "temp"}:
+                            emoji = weather_emoji(period_row[c_key], is_day_val)
+                            return f"{emoji} {period_row[t_key]:.1f}\u00B0C"
+                        if field == "wind":
+                            return f"{period_row[w_key]:.1f}"
+                if not row:
+                    raise ValueError(f"no current data for city {cid}")
                 is_day = row["is_day"] if "is_day" in row.keys() else None
-                emoji = weather_emoji(row["weather_code"], is_day)
-                return f"{emoji} {row['temperature']:.1f}\u00B0C"
-            if field == "wind":
+                if field in {"temperature", "temp"}:
+                    emoji = weather_emoji(row["weather_code"], is_day)
+                    return f"{emoji} {row['temperature']:.1f}\u00B0C"
+
                 return f"{row['wind_speed']:.1f}"
             return ""
 
