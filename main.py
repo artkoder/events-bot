@@ -723,16 +723,39 @@ class Bot:
         logging.info("Stored asset %s tags=%s", message_id, hashtags)
 
     def next_asset(self, tags: set[str] | None):
+        """Return and mark the next unused asset.
+
+        When ``tags`` is ``None`` or empty, the very first unused asset is
+        returned regardless of its hashtags. Otherwise we search for a tag
+        match and fall back to an untagged asset.
+        """
+
         logging.info("Selecting asset for tags=%s", tags)
 
         cur = self.db.execute(
             "SELECT message_id, hashtags, template FROM asset_images WHERE used_at IS NULL ORDER BY message_id"
         )
         rows = cur.fetchall()
+
+        if not rows:
+            logging.info("No asset available")
+            return None
+
+        if not tags:
+            r = rows[0]
+            self.db.execute(
+                "UPDATE asset_images SET used_at=? WHERE message_id=?",
+                (datetime.utcnow().isoformat(), r["message_id"]),
+            )
+            self.db.commit()
+            logging.info("Picked asset %s", r["message_id"])
+            return r
+
         first_no_tag = None
         for r in rows:
             tagset = set(r["hashtags"].split()) if r["hashtags"] else set()
-            if tags and tagset & tags:
+            if tagset & tags:
+
                 self.db.execute(
                     "UPDATE asset_images SET used_at=? WHERE message_id=?",
                     (datetime.utcnow().isoformat(), r["message_id"]),
@@ -740,10 +763,11 @@ class Bot:
                 self.db.commit()
 
                 logging.info("Picked asset %s", r["message_id"])
-
                 return r
             if not tagset and first_no_tag is None:
                 first_no_tag = r
+
+
         if first_no_tag:
             self.db.execute(
                 "UPDATE asset_images SET used_at=? WHERE message_id=?",
@@ -753,6 +777,8 @@ class Bot:
 
             logging.info("Picked asset %s (no tags)", first_no_tag["message_id"])
             return first_no_tag
+
+
         logging.info("No asset available")
         return None
 
