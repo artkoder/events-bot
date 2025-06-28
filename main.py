@@ -1039,6 +1039,21 @@ class Bot:
                 })
             return
 
+        if text.startswith('/seas') and self.is_superadmin(user_id):
+            cur = self.db.execute('SELECT id, name, lat, lon FROM seas ORDER BY id')
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No seas'})
+                return
+            for r in rows:
+                keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'sea_del:{r["id"]}'}]]}
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': f"{r['id']}: {r['name']} ({r['lat']:.6f}, {r['lon']:.6f})",
+                    'reply_markup': keyboard
+                })
+            return
+
         if text.startswith('/weatherposts') and self.is_superadmin(user_id):
             parts = text.split(maxsplit=1)
             force = len(parts) > 1 and parts[1] == 'update'
@@ -1312,6 +1327,16 @@ class Bot:
                 'reply_markup': {}
             })
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'City {cid} deleted'})
+        elif data.startswith('sea_del:') and self.is_superadmin(user_id):
+            sid = int(data.split(':')[1])
+            self.db.execute('DELETE FROM seas WHERE id=?', (sid,))
+            self.db.commit()
+            await self.api_request('editMessageReplyMarkup', {
+                'chat_id': query['message']['chat']['id'],
+                'message_id': query['message']['message_id'],
+                'reply_markup': {}
+            })
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'Sea {sid} deleted'})
         await self.api_request('answerCallbackQuery', {'callback_query_id': query['id']})
 
 

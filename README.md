@@ -42,6 +42,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
+- /seas - list sea locations with inline delete buttons (admin).
 
 
 
