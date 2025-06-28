@@ -53,11 +53,13 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /list_weather_channels - show configured weather channels with action buttons
 - /set_assets_channel - choose the channel used for weather assets
 
+
 ### Asset channel
 Images and caption templates are stored in a private channel
 `@kotopogoda_assets`. Choose this channel with `/set_assets_channel`. When the bot
 is an admin of this private channel, every new post is stored automatically for
 future weather updates and deleted after publishing.
+
 
 
 

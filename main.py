@@ -187,6 +187,7 @@ class Bot:
         self.pending = {}
         self.failed_fetches: dict[int, tuple[int, datetime]] = {}
         self.asset_channel_id = self.get_asset_channel()
+
         self.session: ClientSession | None = None
         self.running = False
 
@@ -746,6 +747,8 @@ class Bot:
         return None
 
 
+
+
     async def publish_weather(self, channel_id: int, tags: set[str] | None = None):
         asset = self.next_asset(tags)
         caption = asset["template"] if asset and asset["template"] else ""
@@ -1230,6 +1233,7 @@ class Bot:
             return
 
 
+
         if text.startswith('/weather') and self.is_superadmin(user_id):
 
             parts = text.split(maxsplit=1)
@@ -1604,6 +1608,7 @@ class Bot:
                 try:
                     await self.collect_weather()
                     await self.collect_sea()
+
                     await self.process_weather_channels()
                 except Exception:
                     logging.exception('Weather collection failed')
