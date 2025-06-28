@@ -43,7 +43,7 @@ no further requests are made for that city until the next scheduled half hour.
 
 - `/weatherposts` – list registered weather posts. Append `update` to refresh all
   posts immediately. Each entry shows the post link followed by the rendered
-  weather header.
+  weather header including sea temperature when a sea location is registered.
 
 ### Templates
 

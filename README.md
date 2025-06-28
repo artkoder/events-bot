@@ -63,7 +63,9 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-13**: Admin requests last weather check info and can force an update.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
-- **US-16**: Admin lists registered posts showing the rendered weather and sea data.
+
+- **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
+
 
 
 
