@@ -34,9 +34,11 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /delbutton <post_url> - remove all buttons from an existing post
 
 - /addcity <name> <lat> <lon> - add a city for weather checks (admin, coordinates
+
   may include six or more decimal places and may be separated with a comma)
 - /addsea <name> <lat> <lon> - add a sea location for water temperature checks
   (comma separator allowed)
+
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
 
