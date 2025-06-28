@@ -102,7 +102,7 @@ CREATE_TABLES = [
             wind_speed REAL,
             PRIMARY KEY (city_id, day)
         )""",
-    """CREATE TABLE IF NOT EXISTS weather_cache_hour (
+        """CREATE TABLE IF NOT EXISTS weather_cache_hour (
             city_id INTEGER NOT NULL,
             timestamp DATETIME NOT NULL,
             temperature REAL,
@@ -110,6 +110,24 @@ CREATE_TABLES = [
             wind_speed REAL,
             is_day INTEGER,
             PRIMARY KEY (city_id, timestamp)
+        )""",
+
+    """CREATE TABLE IF NOT EXISTS seas (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            UNIQUE(name)
+        )""",
+
+    """CREATE TABLE IF NOT EXISTS sea_cache (
+            sea_id INTEGER PRIMARY KEY,
+            updated TEXT,
+            current REAL,
+            morning REAL,
+            day REAL,
+            evening REAL,
+            night REAL
         )""",
 
     """CREATE TABLE IF NOT EXISTS weather_posts (
@@ -146,6 +164,12 @@ class Bot:
 
             ("weather_posts", "base_caption"),
             ("weather_posts", "reply_markup"),
+            ("sea_cache", "updated"),
+            ("sea_cache", "current"),
+            ("sea_cache", "morning"),
+            ("sea_cache", "day"),
+            ("sea_cache", "evening"),
+            ("sea_cache", "night"),
 
         ):
             cur = self.db.execute(f"PRAGMA table_info({table})")
@@ -221,6 +245,29 @@ class Bot:
         logging.info("Weather response: %s", data.get("current"))
         return data
 
+    async def fetch_open_meteo_sea(self, lat: float, lon: float) -> dict | None:
+        url = (
+            "https://marine-api.open-meteo.com/v1/marine?latitude="
+            f"{lat}&longitude={lon}&hourly=sea_surface_temperature&timezone=auto"
+        )
+        try:
+            async with self.session.get(url) as resp:
+                text = await resp.text()
+        except Exception:
+            logging.exception("Failed to fetch sea")
+            return None
+
+        logging.info("Sea API raw response: %s", text)
+        if resp.status != 200:
+            logging.error("Open-Meteo sea HTTP %s", resp.status)
+            return None
+        try:
+            data = json.loads(text)
+        except Exception:
+            logging.exception("Invalid sea JSON")
+            return None
+        return data
+
     async def collect_weather(self, force: bool = False):
 
         cur = self.db.execute("SELECT id, lat, lon, name FROM cities")
@@ -294,6 +341,62 @@ class Bot:
                 logging.exception("Error processing weather for city %s", c["id"])
         if updated:
             await self.update_weather_posts(updated)
+
+    async def collect_sea(self, force: bool = False):
+        cur = self.db.execute("SELECT id, lat, lon FROM seas")
+        updated: set[int] = set()
+        for s in cur.fetchall():
+            row = self.db.execute(
+                "SELECT updated FROM sea_cache WHERE sea_id=?",
+                (s["id"],),
+            ).fetchone()
+            now = datetime.utcnow()
+            last = datetime.fromisoformat(row["updated"]) if row else datetime.min
+            if not force and last > now - timedelta(minutes=30):
+                continue
+
+            data = await self.fetch_open_meteo_sea(s["lat"], s["lon"])
+            if not data or "hourly" not in data:
+                continue
+            temps = data["hourly"].get("water_temperature") or data["hourly"].get("sea_surface_temperature")
+            times = data["hourly"].get("time")
+            if not temps or not times:
+                continue
+
+            current = temps[0]
+            tomorrow = date.today() + timedelta(days=1)
+            morn = day_temp = eve = night = None
+            for t, temp in zip(times, temps):
+                dt = datetime.fromisoformat(t)
+                if dt.date() != tomorrow:
+                    continue
+                if dt.hour == 6 and morn is None:
+                    morn = temp
+                elif dt.hour == 12 and day_temp is None:
+                    day_temp = temp
+                elif dt.hour == 18 and eve is None:
+                    eve = temp
+                elif dt.hour == 0 and night is None:
+                    night = temp
+                if morn is not None and day_temp is not None and eve is not None and night is not None:
+                    break
+
+            self.db.execute(
+                "INSERT OR REPLACE INTO sea_cache (sea_id, updated, current, morning, day, evening, night) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    s["id"],
+                    now.isoformat(),
+                    current,
+                    morn,
+                    day_temp,
+                    eve,
+                    night,
+                ),
+            )
+            self.db.commit()
+            updated.add(s["id"])
+        if updated:
+            await self.update_weather_posts()
 
     async def handle_update(self, update):
         if 'message' in update:
@@ -444,12 +547,39 @@ class Bot:
             (city_id,),
         ).fetchone()
 
+    def _get_sea_cache(self, sea_id: int):
+        return self.db.execute(
+            "SELECT current, morning, day, evening, night FROM sea_cache WHERE sea_id=?",
+            (sea_id,),
+        ).fetchone()
+
+    @staticmethod
+    def _parse_coords(text: str) -> tuple[float, float] | None:
+        """Parse latitude and longitude from string allowing comma separator."""
+        parts = [p for p in re.split(r"[ ,]+", text.strip()) if p]
+        if len(parts) != 2:
+            return None
+        try:
+            return float(parts[0]), float(parts[1])
+        except ValueError:
+            return None
+
     def _render_template(self, template: str) -> str | None:
         """Replace placeholders in template with cached weather values."""
 
         def repl(match: re.Match[str]) -> str:
             cid = int(match.group(1))
             field = match.group(2)
+            if field == "seatemperature":
+                row = self._get_sea_cache(cid)
+                if not row:
+                    raise ValueError(f"no sea data for {cid}")
+                emoji = "\U0001F30A"
+                return (
+                    f"{emoji} {row['current']:.1f}\u00B0C "
+                    f"{row['morning']:.1f}/{row['day']:.1f}/{row['evening']:.1f}/{row['night']:.1f}"
+                )
+
             row = self._get_cached_weather(cid)
             if not row:
                 raise ValueError(f"no data for city {cid}")
@@ -461,13 +591,6 @@ class Bot:
                 return f"{emoji} {row['temperature']:.1f}\u00B0C"
             if field == "wind":
                 return f"{row['wind_speed']:.1f}"
-            if field == "seatemperature":
-
-                sea = row["sea_temperature"] if "sea_temperature" in row.keys() else None
-
-                if sea is None:
-                    raise ValueError("no sea temperature")
-                return f"{sea:.1f}\u00B0C"
             return ""
 
         try:
@@ -859,15 +982,14 @@ class Bot:
             return
 
         if text.startswith('/addcity') and self.is_superadmin(user_id):
-            parts = text.split()
-            if len(parts) == 4:
+            parts = text.split(maxsplit=2)
+            if len(parts) == 3:
                 name = parts[1]
-                try:
-                    lat = float(parts[2])
-                    lon = float(parts[3])
-                except ValueError:
+                coords = self._parse_coords(parts[2])
+                if not coords:
                     await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid coordinates'})
                     return
+                lat, lon = coords
                 try:
                     self.db.execute('INSERT INTO cities (name, lat, lon) VALUES (?, ?, ?)', (name, lat, lon))
                     self.db.commit()
@@ -878,6 +1000,25 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Usage: /addcity <name> <lat> <lon>'})
             return
 
+        if text.startswith('/addsea') and self.is_superadmin(user_id):
+            parts = text.split(maxsplit=2)
+            if len(parts) == 3:
+                name = parts[1]
+                coords = self._parse_coords(parts[2])
+                if not coords:
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid coordinates'})
+                    return
+                lat, lon = coords
+                try:
+                    self.db.execute('INSERT INTO seas (name, lat, lon) VALUES (?, ?, ?)', (name, lat, lon))
+                    self.db.commit()
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'Sea {name} added'})
+                except sqlite3.IntegrityError:
+                    await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Sea already exists'})
+            else:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Usage: /addsea <name> <lat> <lon>'})
+            return
+
         if text.startswith('/cities') and self.is_superadmin(user_id):
             cur = self.db.execute('SELECT id, name, lat, lon FROM cities ORDER BY id')
             rows = cur.fetchall()
@@ -886,6 +1027,21 @@ class Bot:
                 return
             for r in rows:
                 keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'city_del:{r["id"]}'}]]}
+                await self.api_request('sendMessage', {
+                    'chat_id': user_id,
+                    'text': f"{r['id']}: {r['name']} ({r['lat']:.6f}, {r['lon']:.6f})",
+                    'reply_markup': keyboard
+                })
+            return
+
+        if text.startswith('/seas') and self.is_superadmin(user_id):
+            cur = self.db.execute('SELECT id, name, lat, lon FROM seas ORDER BY id')
+            rows = cur.fetchall()
+            if not rows:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No seas'})
+                return
+            for r in rows:
+                keyboard = {'inline_keyboard': [[{'text': 'Delete', 'callback_data': f'sea_del:{r["id"]}'}]]}
                 await self.api_request('sendMessage', {
                     'chat_id': user_id,
                     'text': f"{r['id']}: {r['name']} ({r['lat']:.6f}, {r['lon']:.6f})",
@@ -921,6 +1077,7 @@ class Bot:
             parts = text.split(maxsplit=1)
             if len(parts) > 1 and parts[1].lower() == 'now':
                 await self.collect_weather(force=True)
+                await self.collect_sea(force=True)
 
             cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
             rows = cur.fetchall()
@@ -938,6 +1095,18 @@ class Bot:
                     lines.append(
                         f"{r['name']}: {w['temperature']:.1f}°C {emoji} wind {w['wind_speed']:.1f} m/s at {w['timestamp']}"
 
+                    )
+                else:
+                    lines.append(f"{r['name']}: no data")
+
+            cur = self.db.execute('SELECT id, name FROM seas ORDER BY id')
+            sea_rows = cur.fetchall()
+            for r in sea_rows:
+                row = self._get_sea_cache(r['id'])
+                if row and all(row[k] is not None for k in row.keys()):
+                    emoji = "\U0001F30A"
+                    lines.append(
+                        f"{r['name']}: {emoji} {row['current']:.1f}°C {row['morning']:.1f}/{row['day']:.1f}/{row['evening']:.1f}/{row['night']:.1f}"
                     )
                 else:
                     lines.append(f"{r['name']}: no data")
@@ -1153,6 +1322,16 @@ class Bot:
                 'reply_markup': {}
             })
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'City {cid} deleted'})
+        elif data.startswith('sea_del:') and self.is_superadmin(user_id):
+            sid = int(data.split(':')[1])
+            self.db.execute('DELETE FROM seas WHERE id=?', (sid,))
+            self.db.commit()
+            await self.api_request('editMessageReplyMarkup', {
+                'chat_id': query['message']['chat']['id'],
+                'message_id': query['message']['message_id'],
+                'reply_markup': {}
+            })
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'Sea {sid} deleted'})
         await self.api_request('answerCallbackQuery', {'callback_query_id': query['id']})
 
 
@@ -1208,6 +1387,7 @@ class Bot:
                 await self.process_due()
                 try:
                     await self.collect_weather()
+                    await self.collect_sea()
                 except Exception:
                     logging.exception('Weather collection failed')
                 await asyncio.sleep(SCHED_INTERVAL_SEC)

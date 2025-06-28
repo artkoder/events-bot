@@ -37,4 +37,4 @@ The application targets Fly.io free tier and runs a single process.
 - US-13: admin requests last weather check info and can force an update.
 - US-14: admin registers a weather post for updates.
 - US-15: automatic weather post updates.
-- US-16: admin lists registered posts.
+- US-16: admin lists registered posts with weather and sea data for all registered seas.

@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -40,6 +40,41 @@ async def test_add_list_delete_city(tmp_path):
 
     await bot.handle_update({"callback_query": {"from": {"id": 1}, "data": cb, "message": {"chat": {"id": 1}, "message_id": 10}, "id": "q"}})
     cur = bot.db.execute("SELECT * FROM cities WHERE id=?", (cid,))
+    assert cur.fetchone() is None
+    assert any(c[0] == "editMessageReplyMarkup" for c in calls)
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_add_list_delete_sea(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    calls = []
+
+    async def dummy(method, data=None):
+        calls.append((method, data))
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+    await bot.start()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Baltic 54 20", "from": {"id": 1}}})
+    cur = bot.db.execute("SELECT name FROM seas")
+    row = cur.fetchone()
+    assert row and row["name"] == "Baltic"
+
+    await bot.handle_update({"message": {"text": "/seas", "from": {"id": 1}}})
+    last = calls[-1]
+    assert last[0] == "sendMessage"
+    assert "54.000000" in last[1]["text"] and "20.000000" in last[1]["text"]
+
+    cb = last[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+    sid = int(cb.split(":")[1])
+
+    await bot.handle_update({"callback_query": {"from": {"id": 1}, "data": cb, "message": {"chat": {"id": 1}, "message_id": 10}, "id": "q"}})
+    cur = bot.db.execute("SELECT * FROM seas WHERE id=?", (sid,))
     assert cur.fetchone() is None
     assert any(c[0] == "editMessageReplyMarkup" for c in calls)
 
@@ -373,6 +408,163 @@ async def test_night_clear_emoji(tmp_path):
     # last sendMessage should include moon emoji U+1F319
     assert "\U0001F319" in api_calls[-1][1]["text"]
 
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_add_sea_and_template(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {"ok": True, "result": {"message_id": 99, "text": "orig"}}
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_sea(lat, lon):
+        tomorrow = date.today() + timedelta(days=1)
+        times = [
+            datetime.utcnow().isoformat(),
+            datetime.combine(tomorrow, datetime.min.time()).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=6)).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=12)).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=18)).isoformat(),
+        ]
+        temps = [19.0, 20.0, 21.0, 22.0, 23.0]
+        return {"hourly": {"water_temperature": temps, "time": times}}
+
+    bot.fetch_open_meteo_sea = fetch_sea  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Black 40 30", "from": {"id": 1}}})
+    cur = bot.db.execute("SELECT name FROM seas")
+    assert cur.fetchone()["name"] == "Black"
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/1/1 {1|seatemperature}", "from": {"id": 1}}})
+    await bot.collect_sea()
+    assert any(c[0] == "editMessageText" for c in api_calls)
+    text = [c[1]["text"] for c in api_calls if c[0] == "editMessageText"][0]
+    assert "\U0001F30A" in text
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_add_sea_comma_coords(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def dummy(method, data=None):
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Baltic 54.1, 19.2", "from": {"id": 1}}})
+
+    cur = bot.db.execute("SELECT lat, lon FROM seas WHERE name='Baltic'")
+    row = cur.fetchone()
+    assert round(row["lat"], 1) == 54.1 and round(row["lon"], 1) == 19.2
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_weather_lists_sea(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_city(lat, lon):
+        return {"current": {"temperature_2m": 12.0, "weather_code": 1, "wind_speed_10m": 3.0, "is_day": 1}}
+
+    tomorrow = date.today() + timedelta(days=1)
+    times = [
+        datetime.utcnow().isoformat(),
+        datetime.combine(tomorrow, datetime.min.time()).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=6)).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=12)).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=18)).isoformat(),
+    ]
+    temps = [19.0, 20.0, 21.0, 22.0, 23.0]
+
+    async def fetch_sea(lat, lon):
+        return {"hourly": {"water_temperature": temps, "time": times}}
+
+    bot.fetch_open_meteo = fetch_city  # type: ignore
+    bot.fetch_open_meteo_sea = fetch_sea  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addcity Paris 48 2", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Baltic 40 30", "from": {"id": 1}}})
+
+    await bot.collect_weather()
+    await bot.collect_sea()
+
+    await bot.handle_update({"message": {"text": "/weather", "from": {"id": 1}}})
+    msg = api_calls[-1]
+    assert msg[0] == "sendMessage"
+    assert "Paris" in msg[1]["text"] and "Baltic" in msg[1]["text"]
+    assert "\U0001F30A" in msg[1]["text"]
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_weather_now_fetches_sea(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def dummy(method, data=None):
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    count_city = 0
+    async def fetch_city(lat, lon):
+        nonlocal count_city
+        count_city += 1
+        return {"current": {"temperature_2m": 5.0, "weather_code": 1, "wind_speed_10m": 1.0, "is_day": 1}}
+
+    count_sea = 0
+    tomorrow = date.today() + timedelta(days=1)
+    times = [
+        datetime.utcnow().isoformat(),
+        datetime.combine(tomorrow, datetime.min.time()).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=6)).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=12)).isoformat(),
+        datetime.combine(tomorrow, datetime.min.time().replace(hour=18)).isoformat(),
+    ]
+    temps = [18.0, 19.0, 20.0, 21.0, 22.0]
+
+    async def fetch_sea(lat, lon):
+        nonlocal count_sea
+        count_sea += 1
+        return {"hourly": {"water_temperature": temps, "time": times}}
+
+    bot.fetch_open_meteo = fetch_city  # type: ignore
+    bot.fetch_open_meteo_sea = fetch_sea  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'Rome', 1, 1)")
+    bot.db.execute("INSERT INTO seas (id, name, lat, lon) VALUES (1, 'Med', 2, 2)")
+    bot.db.commit()
+
+    await bot.handle_update({"message": {"text": "/weather now", "from": {"id": 1}}})
+    assert count_city == 1 and count_sea == 1
 
     await bot.close()
 
