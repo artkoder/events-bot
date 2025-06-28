@@ -20,11 +20,15 @@ no further requests are made for that city until the next scheduled half hour.
 
 - `/addcity <name> <lat> <lon>` – add a city to the database. Only superadmins can
   execute this command. Latitude and longitude must be valid floating point numbers
-  and may include six or more digits after the decimal point.
+  and may include six or more digits after the decimal point. Coordinates may be
+  separated with a comma.
 - `/cities` – list registered cities. Each entry has an inline *Delete* button that
   removes the city from the list. Coordinates are displayed with six decimal digits
   to reflect the stored precision.
 - `/addsea <name> <lat> <lon>` – add a sea location for water temperature checks.
+
+  Coordinates may also be separated with a comma.
+
 - `/weather` – show the last collected weather for all cities. Only superadmins may
 
   request this information. Append `now` to force a fresh API request before

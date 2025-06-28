@@ -419,3 +419,25 @@ async def test_add_sea_and_template(tmp_path):
 
     await bot.close()
 
+
+
+@pytest.mark.asyncio
+async def test_add_sea_comma_coords(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    async def dummy(method, data=None):
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Baltic 54.1, 19.2", "from": {"id": 1}}})
+
+    cur = bot.db.execute("SELECT lat, lon FROM seas WHERE name='Baltic'")
+    row = cur.fetchone()
+    assert round(row["lat"], 1) == 54.1 and round(row["lon"], 1) == 19.2
+
+    await bot.close()
+
+
