@@ -420,6 +420,7 @@ async def test_add_sea_and_template(tmp_path):
     await bot.close()
 
 
+
 @pytest.mark.asyncio
 async def test_add_sea_comma_coords(tmp_path):
     bot = Bot("dummy", str(tmp_path / "db.sqlite"))
@@ -438,4 +439,5 @@ async def test_add_sea_comma_coords(tmp_path):
     assert round(row["lat"], 1) == 54.1 and round(row["lon"], 1) == 19.2
 
     await bot.close()
+
 

@@ -553,6 +553,7 @@ class Bot:
             (sea_id,),
         ).fetchone()
 
+
     @staticmethod
     def _parse_coords(text: str) -> tuple[float, float] | None:
         """Parse latitude and longitude from string allowing comma separator."""
@@ -563,6 +564,7 @@ class Bot:
             return float(parts[0]), float(parts[1])
         except ValueError:
             return None
+
 
     def _render_template(self, template: str) -> str | None:
         """Replace placeholders in template with cached weather values."""
@@ -1001,6 +1003,7 @@ class Bot:
             return
 
         if text.startswith('/addsea') and self.is_superadmin(user_id):
+
             parts = text.split(maxsplit=2)
             if len(parts) == 3:
                 name = parts[1]
@@ -1009,6 +1012,7 @@ class Bot:
                     await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid coordinates'})
                     return
                 lat, lon = coords
+
                 try:
                     self.db.execute('INSERT INTO seas (name, lat, lon) VALUES (?, ?, ?)', (name, lat, lon))
                     self.db.commit()
