@@ -18,6 +18,10 @@ This bot allows authorized users to schedule posts to their Telegram channels.
   the cached weather and sea temperature for all registered locations.
 - Register channel posts with custom templates for automatic weather updates,
   including sea temperature, working with both text and caption posts.
+- Daily weather posts use images from a dedicated private channel selected with
+  `/set_assets_channel`.
+- Forecast periods (morning/day/evening/night) are averaged from hourly data and
+  rounded to whole degrees for smoother values.
 
 
 ## Commands
@@ -25,12 +29,13 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /pending - list pending users (admin)
 - /approve <id> - approve user
 - /reject <id> - reject user
+- /add_user <id> - manually add a user (superadmin)
 - /list_users - list approved users
 - /remove_user <id> - remove user
 - /channels - list channels (admin)
 - /scheduled - show scheduled posts with target channel names
 - /history - recent posts
-- /tz <offset> - set timezone offset (e.g., +02:00)
+- /tz <offset> - set timezone offset (e.g., +02:00). Affects daily weather schedules immediately
 - /addbutton <post_url> <text> <url> - add inline button to existing post (button text may contain spaces)
 - /delbutton <post_url> - remove all buttons from an existing post
 
@@ -43,6 +48,23 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
 - /seas - list sea locations with inline delete buttons (admin).
+- /weather [now] - show cached weather; append `now` to refresh data
+- /regweather <post_url> <template> - register a post for weather updates
+- /weatherposts [update] - list registered weather posts; append `update` to refresh
+- /setup_weather - interactive wizard to add a daily forecast channel
+- /list_weather_channels - show configured weather channels with action buttons
+- /set_assets_channel - choose the channel used for weather assets
+
+When using the "Run now" button from `/list_weather_channels`, the bot attempts
+to copy the next available asset. If no unused asset exists, it replies with
+"No asset to publish".
+
+### Asset channel
+Images and caption templates are stored in a private channel
+`@kotopogoda_assets`. Choose this channel with `/set_assets_channel` **before**
+uploading assets. Only posts sent after the bot becomes an admin are captured.
+Used posts are deleted automatically after publishing so the channel always
+contains only fresh assets.
 
 
 
@@ -66,6 +88,10 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
 - **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
+- **US-17**: Admin adds a channel for daily weather posts and specifies the publication time with `/setup_weather`.
+- **US-18**: Content manager uploads images with templates to `@kotopogoda_assets`; used posts disappear after publishing.
+- **US-19**: Admin views the list of weather channels and can send a post immediately with «Run now» or remove a channel with «Stop».
+- **US-20**: The bot publishes the weather once per day for each configured channel at the set time.
 
 
 
