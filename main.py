@@ -150,6 +150,7 @@ CREATE_TABLES = [
             last_published_at TEXT
         )""",
 
+
     """CREATE TABLE IF NOT EXISTS weather_cache_period (
             city_id INTEGER PRIMARY KEY,
             updated TEXT,
@@ -166,6 +167,7 @@ CREATE_TABLES = [
             night_code INTEGER,
             night_wind REAL
         )""",
+
 ]
 
 
@@ -204,6 +206,7 @@ class Bot:
         self.pending = {}
         self.failed_fetches: dict[int, tuple[int, datetime]] = {}
         self.asset_channel_id = self.get_asset_channel()
+
         self.session: ClientSession | None = None
         self.running = False
 
@@ -363,23 +366,28 @@ class Bot:
                         w.get("wind_speed_10m"),
                     ),
                 )
+
                 # parse hourly forecast for tomorrow using averages
+
                 h = data.get("hourly", {})
                 times = h.get("time") or []
                 temps = h.get("temperature_2m") or []
                 codes = h.get("weather_code") or []
                 winds = h.get("wind_speed_10m") or []
                 tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
+
                 buckets = {
                     "morning": ([], [], []),  # temp, code, wind
                     "day": ([], [], []),
                     "evening": ([], [], []),
                     "night": ([], [], []),
                 }
+
                 for tstr, temp, code, wind in zip(times, temps, codes, winds):
                     dt_obj = datetime.fromisoformat(tstr)
                     if dt_obj.date() != tomorrow:
                         continue
+
                     h = dt_obj.hour
                     if 6 <= h < 12:
                         b = buckets["morning"]
@@ -411,6 +419,7 @@ class Bot:
                 nt = avg(buckets["night"][0])
                 nc = mid_code(buckets["night"][1])
                 nw = avg(buckets["night"][2])
+
                 self.db.execute(
                     "INSERT OR REPLACE INTO weather_cache_period (city_id, updated, morning_temp, morning_code, morning_wind, day_temp, day_code, day_wind, evening_temp, evening_code, evening_wind, night_temp, night_code, night_wind) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -420,7 +429,9 @@ class Bot:
                         mt,
                         mc,
                         mw,
+
                         dt_val,
+
                         dc,
                         dw,
                         et,
@@ -504,8 +515,10 @@ class Bot:
         message = update.get('message') or update.get('channel_post')
         if message:
             await self.handle_message(message)
+
         elif 'edited_channel_post' in update:
             await self.handle_edited_message(update['edited_channel_post'])
+
         elif 'callback_query' in update:
             await self.handle_callback(update['callback_query'])
         elif 'my_chat_member' in update:
@@ -717,6 +730,7 @@ class Bot:
             period_row = self._get_period_weather(cid) if period else None
             if not row and not period_row:
                 raise ValueError(f"no data for city {cid}")
+
             if field in {"temperature", "temp", "wind"}:
                 if period_row and period:
                     key_map = {
@@ -729,7 +743,9 @@ class Bot:
                     if period_row[t_key] is not None:
                         if field in {"temperature", "temp"}:
                             emoji = weather_emoji(period_row[c_key], is_day_val)
+
                             return f"{emoji} {period_row[t_key]:.0f}\u00B0C"
+
                         if field == "wind":
                             return f"{period_row[w_key]:.1f}"
                 if not row:
@@ -738,14 +754,17 @@ class Bot:
                 if field in {"temperature", "temp"}:
                     emoji = weather_emoji(row["weather_code"], is_day)
                     return f"{emoji} {row['temperature']:.1f}\u00B0C"
+
                 return f"{row['wind_speed']:.1f}"
             return ""
 
         try:
+
             rendered = re.sub(r"{(\d+)\|(?:(nm|nd|ny|nn)-)?(\w+)}", repl, template)
             tomorrow = date.today() + timedelta(days=1)
             rendered = rendered.replace("{next-day-date}", tomorrow.strftime("%d"))
             rendered = rendered.replace("{next-day-month}", months[tomorrow.month - 1])
+
             return rendered
         except ValueError as e:
             logging.info("%s", e)
@@ -850,6 +869,7 @@ class Bot:
         return row["channel_id"] if row else None
 
     def add_asset(self, message_id: int, hashtags: str, template: str | None = None):
+
         cur = self.db.execute(
             "SELECT used_at FROM asset_images WHERE message_id=?",
             (message_id,),
@@ -861,6 +881,7 @@ class Bot:
             (message_id, hashtags, template, used_at),
         )
         self.db.commit()
+
         logging.info("Stored asset %s tags=%s", message_id, hashtags)
 
     def next_asset(self, tags: set[str] | None):
@@ -872,10 +893,12 @@ class Bot:
         """
 
         logging.info("Selecting asset for tags=%s", tags)
+
         cur = self.db.execute(
             "SELECT message_id, hashtags, template FROM asset_images WHERE used_at IS NULL ORDER BY message_id"
         )
         rows = cur.fetchall()
+
         if not rows:
             logging.info("No asset available")
             return None
@@ -894,15 +917,18 @@ class Bot:
         for r in rows:
             tagset = set(r["hashtags"].split()) if r["hashtags"] else set()
             if tagset & tags:
+
                 self.db.execute(
                     "UPDATE asset_images SET used_at=? WHERE message_id=?",
                     (datetime.utcnow().isoformat(), r["message_id"]),
                 )
                 self.db.commit()
+
                 logging.info("Picked asset %s", r["message_id"])
                 return r
             if not tagset and first_no_tag is None:
                 first_no_tag = r
+
 
         if first_no_tag:
             self.db.execute(
@@ -910,11 +936,14 @@ class Bot:
                 (datetime.utcnow().isoformat(), first_no_tag["message_id"]),
             )
             self.db.commit()
+
             logging.info("Picked asset %s (no tags)", first_no_tag["message_id"])
             return first_no_tag
 
+
         logging.info("No asset available")
         return None
+
 
 
     async def publish_weather(
@@ -923,13 +952,16 @@ class Bot:
         tags: set[str] | None = None,
         record: bool = True,
     ) -> bool:
+
         asset = self.next_asset(tags)
         caption = asset["template"] if asset and asset["template"] else ""
         if caption:
             caption = self._render_template(caption) or caption
         if asset and self.asset_channel_id:
+
             logging.info("Copying asset %s to %s", asset["message_id"], channel_id)
             resp = await self.api_request(
+
                 "copyMessage",
                 {
                     "chat_id": channel_id,
@@ -942,6 +974,7 @@ class Bot:
                 "deleteMessage",
                 {"chat_id": self.asset_channel_id, "message_id": asset["message_id"]},
             )
+
             ok = resp.get("ok", False)
         elif caption:
             logging.info("Sending text weather to %s", channel_id)
@@ -953,7 +986,9 @@ class Bot:
         else:
             logging.info("No asset and no caption; nothing to publish")
             return False
+
         if ok and record:
+
             self.db.execute(
                 "UPDATE weather_publish_channels SET last_published_at=? WHERE channel_id=?",
                 (datetime.utcnow().isoformat(), channel_id),
@@ -964,17 +999,21 @@ class Bot:
         return ok
 
 
+
     async def handle_message(self, message):
         global TZ_OFFSET
+
         if self.asset_channel_id and message.get('chat', {}).get('id') == self.asset_channel_id:
             caption = message.get('caption') or message.get('text') or ''
             tags = ' '.join(re.findall(r'#\S+', caption))
             self.add_asset(message['message_id'], tags, caption)
             return
 
+
         if 'from' not in message:
             # ignore channel posts when asset channel is not configured
             return
+
 
         text = message.get('text', '')
         user_id = message['from']['id']
@@ -1405,6 +1444,7 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather channels'})
                 return
             for r in rows:
+
                 last = r['last_published_at']
                 if last:
                     last = self.format_time(last, self.get_tz_offset(user_id))
@@ -1424,6 +1464,7 @@ class Bot:
                         'reply_markup': keyboard,
                     },
                 )
+
             return
 
         if text.startswith('/set_assets_channel') and self.is_superadmin(user_id):
@@ -1436,6 +1477,7 @@ class Bot:
             self.pending[user_id] = {'set_assets': True}
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Select asset channel', 'reply_markup': keyboard})
             return
+
 
 
         if text.startswith('/weather') and self.is_superadmin(user_id):
@@ -1674,9 +1716,11 @@ class Bot:
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Asset channel set'})
         elif data.startswith('wrnow:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
+
             ok = await self.publish_weather(cid, None, record=False)
             msg = 'Posted' if ok else 'No asset to publish'
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': msg})
+
         elif data.startswith('wstop:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
             self.remove_weather_channel(cid)
@@ -1794,7 +1838,9 @@ class Bot:
             try:
                 if r["last_published_at"]:
                     last = datetime.fromisoformat(r["last_published_at"])
+
                     if (last + offset).date() == local_now.date():
+
                         continue
                 hh, mm = map(int, r["post_time"].split(":"))
                 scheduled = datetime.combine(local_now.date(), datetime.min.time()).replace(hour=hh, minute=mm)
@@ -1813,6 +1859,7 @@ class Bot:
                 try:
                     await self.collect_weather()
                     await self.collect_sea()
+
                     await self.process_weather_channels()
                 except Exception:
                     logging.exception('Weather collection failed')
