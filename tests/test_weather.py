@@ -450,9 +450,12 @@ async def test_add_sea_and_template(tmp_path):
     await bot.collect_sea()
     assert any(c[0] == "editMessageText" for c in api_calls)
     text = [c[1]["text"] for c in api_calls if c[0] == "editMessageText"][0]
+
     assert "\U0001F30A" in text and "19.0\u00B0C" in text
 
+
     await bot.close()
+
 
 
 @pytest.mark.asyncio
@@ -473,6 +476,7 @@ async def test_add_sea_comma_coords(tmp_path):
     assert round(row["lat"], 1) == 54.1 and round(row["lon"], 1) == 19.2
 
     await bot.close()
+
 
 
 @pytest.mark.asyncio
@@ -567,4 +571,5 @@ async def test_weather_now_fetches_sea(tmp_path):
     assert count_city == 1 and count_sea == 1
 
     await bot.close()
+
 
