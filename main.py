@@ -187,6 +187,7 @@ class Bot:
         self.pending = {}
         self.failed_fetches: dict[int, tuple[int, datetime]] = {}
         self.asset_channel_id = self.get_asset_channel()
+
         self.session: ClientSession | None = None
         self.running = False
 
@@ -718,10 +719,12 @@ class Bot:
             (message_id, hashtags, template),
         )
         self.db.commit()
+
         logging.info("Stored asset %s tags=%s", message_id, hashtags)
 
     def next_asset(self, tags: set[str] | None):
         logging.info("Selecting asset for tags=%s", tags)
+
         cur = self.db.execute(
             "SELECT message_id, hashtags, template FROM asset_images WHERE used_at IS NULL ORDER BY message_id"
         )
@@ -735,7 +738,9 @@ class Bot:
                     (datetime.utcnow().isoformat(), r["message_id"]),
                 )
                 self.db.commit()
+
                 logging.info("Picked asset %s", r["message_id"])
+
                 return r
             if not tagset and first_no_tag is None:
                 first_no_tag = r
@@ -745,6 +750,7 @@ class Bot:
                 (datetime.utcnow().isoformat(), first_no_tag["message_id"]),
             )
             self.db.commit()
+
             logging.info("Picked asset %s (no tags)", first_no_tag["message_id"])
             return first_no_tag
         logging.info("No asset available")
@@ -752,13 +758,16 @@ class Bot:
 
 
     async def publish_weather(self, channel_id: int, tags: set[str] | None = None) -> bool:
+
         asset = self.next_asset(tags)
         caption = asset["template"] if asset and asset["template"] else ""
         if caption:
             caption = self._render_template(caption) or caption
         if asset and self.asset_channel_id:
+
             logging.info("Copying asset %s to %s", asset["message_id"], channel_id)
             resp = await self.api_request(
+
                 "copyMessage",
                 {
                     "chat_id": channel_id,
@@ -771,6 +780,7 @@ class Bot:
                 "deleteMessage",
                 {"chat_id": self.asset_channel_id, "message_id": asset["message_id"]},
             )
+
             ok = resp.get("ok", False)
         elif caption:
             logging.info("Sending text weather to %s", channel_id)
@@ -791,6 +801,7 @@ class Bot:
         else:
             logging.error("Failed to publish weather: %s", resp)
         return ok
+
 
 
     async def handle_message(self, message):
@@ -1245,6 +1256,7 @@ class Bot:
             return
 
 
+
         if text.startswith('/weather') and self.is_superadmin(user_id):
 
             parts = text.split(maxsplit=1)
@@ -1481,9 +1493,11 @@ class Bot:
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Asset channel set'})
         elif data.startswith('wrnow:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
+
             ok = await self.publish_weather(cid, None)
             msg = 'Posted' if ok else 'No asset to publish'
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': msg})
+
         elif data.startswith('wstop:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
             self.remove_weather_channel(cid)
@@ -1620,6 +1634,7 @@ class Bot:
                 try:
                     await self.collect_weather()
                     await self.collect_sea()
+
                     await self.process_weather_channels()
                 except Exception:
                     logging.exception('Weather collection failed')
