@@ -44,21 +44,17 @@ async def test_weather_scheduler_publish(tmp_path):
     await bot.close()
 
 @pytest.mark.asyncio
-async def test_scan_assets(tmp_path):
+
+async def test_handle_asset_message(tmp_path):
     bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
     bot.set_asset_channel(-100123)
-    updates = {
-        'ok': True,
-        'result': [
-            {'update_id': 1, 'channel_post': {'message_id': 10, 'chat': {'id': -100123}, 'caption': '#котопогода #дождь cap'}}
-        ]
+    msg = {
+        'message_id': 10,
+        'chat': {'id': -100123},
+        'caption': '#котопогода #дождь cap'
     }
-    async def dummy(method, data=None):
-        if method == 'getUpdates':
-            return updates
-        return {'ok': True}
-    bot.api_request = dummy  # type: ignore
-    await bot.scan_assets()
+    await bot.handle_message(msg)
+
     a = bot.next_asset({'#дождь'})
     assert a['message_id'] == 10
     await bot.close()

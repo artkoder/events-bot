@@ -187,7 +187,7 @@ class Bot:
         self.pending = {}
         self.failed_fetches: dict[int, tuple[int, datetime]] = {}
         self.asset_channel_id = self.get_asset_channel()
-        self.asset_offset = 0
+
         self.session: ClientSession | None = None
         self.running = False
 
@@ -746,22 +746,8 @@ class Bot:
             return first_no_tag
         return None
 
-    async def scan_assets(self):
-        if not self.asset_channel_id:
-            return
-        resp = await self.api_request(
-            "getUpdates",
-            {"offset": self.asset_offset, "allowed_updates": ["channel_post"]},
-        )
-        if not resp.get("ok"):
-            return
-        for upd in resp.get("result", []):
-            self.asset_offset = max(self.asset_offset, upd["update_id"] + 1)
-            msg = upd.get("channel_post")
-            if msg and msg.get("chat", {}).get("id") == self.asset_channel_id:
-                text = msg.get("caption") or msg.get("text") or ""
-                hashtags = " ".join(re.findall(r"#\S+", text))
-                self.add_asset(msg["message_id"], hashtags, text)
+
+
 
     async def publish_weather(self, channel_id: int, tags: set[str] | None = None):
         asset = self.next_asset(tags)
@@ -1246,10 +1232,7 @@ class Bot:
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Select asset channel', 'reply_markup': keyboard})
             return
 
-        if text.startswith('/reload_assets') and self.is_superadmin(user_id):
-            await self.scan_assets()
-            await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Assets reloaded'})
-            return
+
 
         if text.startswith('/weather') and self.is_superadmin(user_id):
 
@@ -1625,7 +1608,7 @@ class Bot:
                 try:
                     await self.collect_weather()
                     await self.collect_sea()
-                    await self.scan_assets()
+
                     await self.process_weather_channels()
                 except Exception:
                     logging.exception('Weather collection failed')
