@@ -57,14 +57,19 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /set_assets_channel - choose the channel used for weather assets
 
 
-When using the "Run now" button from `/list_weather_channels`, the bot attempts
-to copy the next available asset. If no unused asset exists, it replies with
+`/list_weather_channels` displays the last publication time adjusted to your
+current `/tz` setting. When using the "Run now" button, the bot attempts to copy
+the next available asset. The run is not recorded, so the regular scheduled post
+for that day will still happen. If no unused asset exists, it replies with
+
 "No asset to publish".
 
 ### Asset channel
 Images and caption templates are stored in a private channel
 `@kotopogoda_assets`. Choose this channel with `/set_assets_channel` **before**
 uploading assets. Only posts sent after the bot becomes an admin are captured.
+
+If you edit a post in this channel, the bot updates the stored template.
 Used posts are deleted automatically after publishing so the channel always
 contains only fresh assets.
 

@@ -61,6 +61,29 @@ async def test_handle_asset_message(tmp_path):
 
 
 @pytest.mark.asyncio
+
+async def test_edit_asset(tmp_path):
+    bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
+    bot.set_asset_channel(-100123)
+    msg = {
+        'message_id': 11,
+        'chat': {'id': -100123},
+        'caption': '#котопогода old'
+    }
+    await bot.handle_message(msg)
+    edit = {
+        'message_id': 11,
+        'chat': {'id': -100123},
+        'caption': '#котопогода #новый new'
+    }
+    await bot.handle_edited_message(edit)
+    a = bot.next_asset({'#новый'})
+    assert a and a['message_id'] == 11
+    await bot.close()
+
+
+@pytest.mark.asyncio
+
 async def test_template_russian_and_period(tmp_path):
     bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
     # insert cached weather and sea data

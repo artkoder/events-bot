@@ -221,6 +221,13 @@ class Bot:
 
         self.db.close()
 
+    async def handle_edited_message(self, message):
+        if self.asset_channel_id and message.get('chat', {}).get('id') == self.asset_channel_id:
+            caption = message.get('caption') or message.get('text') or ''
+            tags = ' '.join(re.findall(r'#\S+', caption))
+            self.add_asset(message['message_id'], tags, caption)
+            return
+
     async def api_request(self, method: str, data: dict = None):
         async with self.session.post(f"{self.api_url}/{method}", json=data) as resp:
             text = await resp.text()
@@ -508,6 +515,10 @@ class Bot:
         message = update.get('message') or update.get('channel_post')
         if message:
             await self.handle_message(message)
+
+        elif 'edited_channel_post' in update:
+            await self.handle_edited_message(update['edited_channel_post'])
+
         elif 'callback_query' in update:
             await self.handle_callback(update['callback_query'])
         elif 'my_chat_member' in update:
@@ -858,9 +869,16 @@ class Bot:
         return row["channel_id"] if row else None
 
     def add_asset(self, message_id: int, hashtags: str, template: str | None = None):
+
+        cur = self.db.execute(
+            "SELECT used_at FROM asset_images WHERE message_id=?",
+            (message_id,),
+        )
+        row = cur.fetchone()
+        used_at = row["used_at"] if row else None
         self.db.execute(
-            "INSERT OR REPLACE INTO asset_images (message_id, hashtags, template) VALUES (?, ?, ?)",
-            (message_id, hashtags, template),
+            "INSERT OR REPLACE INTO asset_images (message_id, hashtags, template, used_at) VALUES (?, ?, ?, ?)",
+            (message_id, hashtags, template, used_at),
         )
         self.db.commit()
 
@@ -927,7 +945,13 @@ class Bot:
         return None
 
 
-    async def publish_weather(self, channel_id: int, tags: set[str] | None = None) -> bool:
+
+    async def publish_weather(
+        self,
+        channel_id: int,
+        tags: set[str] | None = None,
+        record: bool = True,
+    ) -> bool:
 
         asset = self.next_asset(tags)
         caption = asset["template"] if asset and asset["template"] else ""
@@ -962,7 +986,9 @@ class Bot:
         else:
             logging.info("No asset and no caption; nothing to publish")
             return False
-        if ok:
+
+        if ok and record:
+
             self.db.execute(
                 "UPDATE weather_publish_channels SET last_published_at=? WHERE channel_id=?",
                 (datetime.utcnow().isoformat(), channel_id),
@@ -1418,9 +1444,27 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather channels'})
                 return
             for r in rows:
-                last = r['last_published_at'] or 'never'
-                keyboard = {'inline_keyboard': [[{'text': 'Run now', 'callback_data': f'wrnow:{r["channel_id"]}'}, {'text': 'Stop', 'callback_data': f'wstop:{r["channel_id"]}'}]]}
-                await self.api_request('sendMessage', {'chat_id': user_id, 'text': f"{r['title'] or r['channel_id']} at {r['post_time']} last {last}", 'reply_markup': keyboard})
+
+                last = r['last_published_at']
+                if last:
+                    last = self.format_time(last, self.get_tz_offset(user_id))
+                else:
+                    last = 'never'
+                keyboard = {
+                    'inline_keyboard': [[
+                        {'text': 'Run now', 'callback_data': f'wrnow:{r["channel_id"]}'},
+                        {'text': 'Stop', 'callback_data': f'wstop:{r["channel_id"]}'}
+                    ]]
+                }
+                await self.api_request(
+                    'sendMessage',
+                    {
+                        'chat_id': user_id,
+                        'text': f"{r['title'] or r['channel_id']} at {r['post_time']} last {last}",
+                        'reply_markup': keyboard,
+                    },
+                )
+
             return
 
         if text.startswith('/set_assets_channel') and self.is_superadmin(user_id):
@@ -1673,7 +1717,7 @@ class Bot:
         elif data.startswith('wrnow:') and self.is_superadmin(user_id):
             cid = int(data.split(':')[1])
 
-            ok = await self.publish_weather(cid, None)
+            ok = await self.publish_weather(cid, None, record=False)
             msg = 'Posted' if ok else 'No asset to publish'
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': msg})
 
