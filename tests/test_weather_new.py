@@ -44,6 +44,7 @@ async def test_weather_scheduler_publish(tmp_path):
     await bot.close()
 
 @pytest.mark.asyncio
+
 async def test_handle_asset_message(tmp_path):
     bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
     bot.set_asset_channel(-100123)
@@ -53,6 +54,7 @@ async def test_handle_asset_message(tmp_path):
         'caption': '#котопогода #дождь cap'
     }
     await bot.handle_message(msg)
+
     a = bot.next_asset({'#дождь'})
     assert a['message_id'] == 10
     await bot.close()
@@ -68,11 +70,13 @@ async def test_template_russian_and_period(tmp_path):
         (datetime.utcnow().isoformat(),),
     )
     bot.db.execute(
+
         "INSERT INTO weather_cache_period (city_id, updated, morning_temp, morning_code, morning_wind, day_temp, day_code, day_wind, evening_temp, evening_code, evening_wind, night_temp, night_code, night_wind)"
         " VALUES (1, ?, 21.0, 1, 4.0, 22.0, 2, 5.0, 23.0, 3, 6.0, 24.0, 4, 7.0)",
         (datetime.utcnow().isoformat(),),
     )
     bot.db.execute(
+
         "INSERT INTO sea_cache (sea_id, updated, current, morning, day, evening, night)"
         " VALUES (1, ?, 15.0, 15.1, 15.2, 15.3, 15.4)",
         (datetime.utcnow().isoformat(),),
@@ -80,7 +84,9 @@ async def test_template_russian_and_period(tmp_path):
     bot.db.commit()
     tpl = '{next-day-date} {next-day-month} {1|nm-temp} {1|nd-seatemperature}'
     result = bot._render_template(tpl)
+
     assert '15.' in result and '21\u00B0C' in result
     months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
     assert any(m in result for m in months)
     await bot.close()
+

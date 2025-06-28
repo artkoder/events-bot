@@ -20,6 +20,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
   including sea temperature, working with both text and caption posts.
 - Daily weather posts use images from a dedicated private channel selected with
   `/set_assets_channel`.
+
 - Forecast periods (morning/day/evening/night) are averaged from hourly data and
   rounded to whole degrees for smoother values.
 
@@ -55,6 +56,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /list_weather_channels - show configured weather channels with action buttons
 - /set_assets_channel - choose the channel used for weather assets
 
+
 When using the "Run now" button from `/list_weather_channels`, the bot attempts
 to copy the next available asset. If no unused asset exists, it replies with
 "No asset to publish".
@@ -65,6 +67,7 @@ Images and caption templates are stored in a private channel
 uploading assets. Only posts sent after the bot becomes an admin are captured.
 Used posts are deleted automatically after publishing so the channel always
 contains only fresh assets.
+
 
 
 
