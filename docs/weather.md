@@ -10,6 +10,12 @@ response and the parsed weather information. The request looks like:
 https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>&current=temperature_2m,weather_code,wind_speed_10m,is_day&timezone=auto
 ```
 
+Sea temperature uses the marine API endpoint:
+
+```
+https://marine-api.open-meteo.com/v1/marine?latitude=<lat>&longitude=<lon>&hourly=sea_surface_temperature&timezone=auto
+```
+
 The bot continues working even if a query fails. When a request fails, it is
 retried up to three times with a one‑minute pause between attempts. After that,
 no further requests are made for that city until the next scheduled half hour.
@@ -28,11 +34,11 @@ no further requests are made for that city until the next scheduled half hour.
 - `/addsea <name> <lat> <lon>` – add a sea location for water temperature checks.
 
   Coordinates may also be separated with a comma.
+- `/weather` – show the last collected weather for all cities and sea locations. Only superadmins may
 
-- `/weather` – show the last collected weather for all cities. Only superadmins may
 
-  request this information. Append `now` to force a fresh API request before
-  displaying results.
+  request this information. Append `now` to force a fresh API request for both
+  weather and sea data before displaying results.
 - `/regweather <post_url> <template>` – register a channel post for automatic
   weather updates. The template may include placeholders like
 

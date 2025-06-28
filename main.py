@@ -248,7 +248,8 @@ class Bot:
     async def fetch_open_meteo_sea(self, lat: float, lon: float) -> dict | None:
         url = (
             "https://marine-api.open-meteo.com/v1/marine?latitude="
-            f"{lat}&longitude={lon}&hourly=water_temperature&timezone=auto"
+            f"{lat}&longitude={lon}&hourly=sea_surface_temperature&timezone=auto"
+
         )
         try:
             async with self.session.get(url) as resp:
@@ -1066,6 +1067,7 @@ class Bot:
             parts = text.split(maxsplit=1)
             if len(parts) > 1 and parts[1].lower() == 'now':
                 await self.collect_weather(force=True)
+                await self.collect_sea(force=True)
 
             cur = self.db.execute('SELECT id, name FROM cities ORDER BY id')
             rows = cur.fetchall()
@@ -1083,6 +1085,18 @@ class Bot:
                     lines.append(
                         f"{r['name']}: {w['temperature']:.1f}°C {emoji} wind {w['wind_speed']:.1f} m/s at {w['timestamp']}"
 
+                    )
+                else:
+                    lines.append(f"{r['name']}: no data")
+
+            cur = self.db.execute('SELECT id, name FROM seas ORDER BY id')
+            sea_rows = cur.fetchall()
+            for r in sea_rows:
+                row = self._get_sea_cache(r['id'])
+                if row and all(row[k] is not None for k in row.keys()):
+                    emoji = "\U0001F30A"
+                    lines.append(
+                        f"{r['name']}: {emoji} {row['current']:.1f}°C {row['morning']:.1f}/{row['day']:.1f}/{row['evening']:.1f}/{row['night']:.1f}"
                     )
                 else:
                     lines.append(f"{r['name']}: no data")

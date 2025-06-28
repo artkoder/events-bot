@@ -14,7 +14,8 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - Add inline buttons to existing posts.
 - Remove inline buttons from existing posts.
 - Weather updates from Open-Meteo roughly every 30 minutes with the raw response logged. Admins
-  can view the latest data or force an update with `/weather now`.
+  can view the latest data or force an update with `/weather now`. The `/weather` command lists
+  the cached weather and sea temperature for all registered locations.
 - Register channel posts with custom templates for automatic weather updates,
   including sea temperature, working with both text and caption posts.
 
@@ -63,7 +64,6 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-13**: Admin requests last weather check info and can force an update.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
-
 - **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
 
 
