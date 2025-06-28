@@ -20,10 +20,13 @@ no further requests are made for that city until the next scheduled half hour.
 
 - `/addcity <name> <lat> <lon>` – add a city to the database. Only superadmins can
   execute this command. Latitude and longitude must be valid floating point numbers
-  and may include six or more digits after the decimal point.
+  and may include six or more digits after the decimal point. Coordinates may be
+  separated with a comma.
 - `/cities` – list registered cities. Each entry has an inline *Delete* button that
   removes the city from the list. Coordinates are displayed with six decimal digits
   to reflect the stored precision.
+- `/addsea <name> <lat> <lon>` – add a sea location for water temperature checks.
+  Coordinates may also be separated with a comma.
 - `/weather` – show the last collected weather for all cities. Only superadmins may
 
   request this information. Append `now` to force a fresh API request before
@@ -31,14 +34,14 @@ no further requests are made for that city until the next scheduled half hour.
 - `/regweather <post_url> <template>` – register a channel post for automatic
   weather updates. The template may include placeholders like
 
-  `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Sea
-  temperature will be available later as `{<city_id>|seatemperature}`. If the
+  `{<city_id>|temperature}` or `{<city_id>|wind}` mixed with text. Water
+  temperature can be inserted with `{<sea_id>|seatemperature}`. If the
   message already contains a weather header separated by `∙` it will be stripped
   when registering so only the original text remains.
 
 - `/weatherposts` – list registered weather posts. Append `update` to refresh all
   posts immediately. Each entry shows the post link followed by the rendered
-  weather header.
+  weather header including sea temperature when a sea location is registered.
 
 ### Templates
 
@@ -95,6 +98,24 @@ CREATE TABLE IF NOT EXISTS weather_posts (
     reply_markup TEXT,
 
     UNIQUE(chat_id, message_id)
+);
+
+CREATE TABLE IF NOT EXISTS seas (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    UNIQUE(name)
+);
+
+CREATE TABLE IF NOT EXISTS sea_cache (
+    sea_id INTEGER PRIMARY KEY,
+    updated TEXT,
+    current REAL,
+    morning REAL,
+    day REAL,
+    evening REAL,
+    night REAL
 );
 ```
 
