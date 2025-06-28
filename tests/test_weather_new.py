@@ -58,3 +58,27 @@ async def test_handle_asset_message(tmp_path):
     a = bot.next_asset({'#дождь'})
     assert a['message_id'] == 10
     await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_template_russian_and_period(tmp_path):
+    bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
+    # insert cached weather and sea data
+    bot.db.execute(
+        "INSERT INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed, is_day)"
+        " VALUES (1, ?, 20.0, 1, 5.0, 1)",
+        (datetime.utcnow().isoformat(),),
+    )
+    bot.db.execute(
+        "INSERT INTO sea_cache (sea_id, updated, current, morning, day, evening, night)"
+        " VALUES (1, ?, 15.0, 15.1, 15.2, 15.3, 15.4)",
+        (datetime.utcnow().isoformat(),),
+    )
+    bot.db.commit()
+    tpl = '{next-day-date} {next-day-month} {1|nm-temp} {1|nd-seatemperature}'
+    result = bot._render_template(tpl)
+    assert '15.' in result and '20.0' in result
+    months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
+    assert any(m in result for m in months)
+    await bot.close()
+

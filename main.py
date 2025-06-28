@@ -580,36 +580,59 @@ class Bot:
     def _render_template(self, template: str) -> str | None:
         """Replace placeholders in template with cached weather values."""
 
+        months = [
+            "января",
+            "февраля",
+            "марта",
+            "апреля",
+            "мая",
+            "июня",
+            "июля",
+            "августа",
+            "сентября",
+            "октября",
+            "ноября",
+            "декабря",
+        ]
+
         def repl(match: re.Match[str]) -> str:
             cid = int(match.group(1))
-            field = match.group(2)
-            if field == "seatemperature":
+            period = match.group(2)
+            field = match.group(3)
+
+            if field in {"seatemperature", "seatemp"}:
                 row = self._get_sea_cache(cid)
                 if not row:
                     raise ValueError(f"no sea data for {cid}")
+                key = {
+                    "nm": "morning",
+                    "nd": "day",
+                    "ny": "evening",
+                    "nn": "night",
+                }.get(period, "current")
+                if row[key] is None:
+                    raise ValueError(f"no sea {key} for {cid}")
                 emoji = "\U0001F30A"
-
-                return f"{emoji} {row['current']:.1f}\u00B0C"
-
+                return f"{emoji} {row[key]:.1f}\u00B0C"
 
             row = self._get_cached_weather(cid)
             if not row:
                 raise ValueError(f"no data for city {cid}")
-            if field == "temperature":
-
+            if field in {"temperature", "temp"}:
                 is_day = row["is_day"] if "is_day" in row.keys() else None
                 emoji = weather_emoji(row["weather_code"], is_day)
-
                 return f"{emoji} {row['temperature']:.1f}\u00B0C"
             if field == "wind":
                 return f"{row['wind_speed']:.1f}"
             return ""
 
         try:
-            rendered = re.sub(r"{(\d+)\|(\w+)}", repl, template)
+
+            rendered = re.sub(r"{(\d+)\|(?:(nm|nd|ny|nn)-)?(\w+)}", repl, template)
             tomorrow = date.today() + timedelta(days=1)
             rendered = rendered.replace("{next-day-date}", tomorrow.strftime("%d"))
-            rendered = rendered.replace("{next-day-month}", tomorrow.strftime("%B"))
+            rendered = rendered.replace("{next-day-month}", months[tomorrow.month - 1])
+
             return rendered
         except ValueError as e:
             logging.info("%s", e)
