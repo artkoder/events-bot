@@ -85,7 +85,7 @@ async def test_template_russian_and_period(tmp_path):
     tpl = '{next-day-date} {next-day-month} {1|nm-temp} {1|nd-seatemperature}'
     result = bot._render_template(tpl)
 
-    assert '15.' in result and '21.0' in result
+    assert '15.' in result and '21\u00B0C' in result
     months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
     assert any(m in result for m in months)
     await bot.close()

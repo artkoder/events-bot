@@ -359,30 +359,60 @@ class Bot:
                         w.get("wind_speed_10m"),
                     ),
                 )
-                # parse hourly forecast for tomorrow
+
+                # parse hourly forecast for tomorrow using averages
+
                 h = data.get("hourly", {})
                 times = h.get("time") or []
                 temps = h.get("temperature_2m") or []
                 codes = h.get("weather_code") or []
                 winds = h.get("wind_speed_10m") or []
                 tomorrow = (datetime.utcnow() + timedelta(days=1)).date()
-                mt = dt = et = nt = None
-                mc = dc = ec = nc = None
-                mw = dw = ew = nw = None
+
+                buckets = {
+                    "morning": ([], [], []),  # temp, code, wind
+                    "day": ([], [], []),
+                    "evening": ([], [], []),
+                    "night": ([], [], []),
+                }
+
                 for tstr, temp, code, wind in zip(times, temps, codes, winds):
                     dt_obj = datetime.fromisoformat(tstr)
                     if dt_obj.date() != tomorrow:
                         continue
-                    if dt_obj.hour == 6 and mt is None:
-                        mt, mc, mw = temp, code, wind
-                    elif dt_obj.hour == 12 and dt is None:
-                        dt, dc, dw = temp, code, wind
-                    elif dt_obj.hour == 18 and et is None:
-                        et, ec, ew = temp, code, wind
-                    elif dt_obj.hour == 0 and nt is None:
-                        nt, nc, nw = temp, code, wind
-                    if mt is not None and dt is not None and et is not None and nt is not None:
-                        break
+
+                    h = dt_obj.hour
+                    if 6 <= h < 12:
+                        b = buckets["morning"]
+                    elif 12 <= h < 18:
+                        b = buckets["day"]
+                    elif 18 <= h < 24:
+                        b = buckets["evening"]
+                    else:
+                        b = buckets["night"]
+                    b[0].append(temp)
+                    b[1].append(code)
+                    b[2].append(wind)
+
+                def avg(lst: list[float]) -> float | None:
+                    return sum(lst) / len(lst) if lst else None
+
+                def mid_code(lst: list[int]) -> int | None:
+                    return lst[len(lst) // 2] if lst else None
+
+                mt = avg(buckets["morning"][0])
+                mc = mid_code(buckets["morning"][1])
+                mw = avg(buckets["morning"][2])
+                dt_val = avg(buckets["day"][0])
+                dc = mid_code(buckets["day"][1])
+                dw = avg(buckets["day"][2])
+                et = avg(buckets["evening"][0])
+                ec = mid_code(buckets["evening"][1])
+                ew = avg(buckets["evening"][2])
+                nt = avg(buckets["night"][0])
+                nc = mid_code(buckets["night"][1])
+                nw = avg(buckets["night"][2])
+
                 self.db.execute(
                     "INSERT OR REPLACE INTO weather_cache_period (city_id, updated, morning_temp, morning_code, morning_wind, day_temp, day_code, day_wind, evening_temp, evening_code, evening_wind, night_temp, night_code, night_wind) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -392,7 +422,9 @@ class Bot:
                         mt,
                         mc,
                         mw,
-                        dt,
+
+                        dt_val,
+
                         dc,
                         dw,
                         et,
@@ -700,7 +732,9 @@ class Bot:
                     if period_row[t_key] is not None:
                         if field in {"temperature", "temp"}:
                             emoji = weather_emoji(period_row[c_key], is_day_val)
-                            return f"{emoji} {period_row[t_key]:.1f}\u00B0C"
+
+                            return f"{emoji} {period_row[t_key]:.0f}\u00B0C"
+
                         if field == "wind":
                             return f"{period_row[w_key]:.1f}"
                 if not row:
@@ -941,6 +975,8 @@ class Bot:
 
 
     async def handle_message(self, message):
+        global TZ_OFFSET
+
         if self.asset_channel_id and message.get('chat', {}).get('id') == self.asset_channel_id:
             caption = message.get('caption') or message.get('text') or ''
             tags = ' '.join(re.findall(r'#\S+', caption))
@@ -1052,6 +1088,7 @@ class Bot:
                 return
             self.db.execute('UPDATE users SET tz_offset=? WHERE user_id=?', (parts[1], user_id))
             self.db.commit()
+            TZ_OFFSET = parts[1]
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': f'Timezone set to {parts[1]}'})
             return
 
@@ -1757,7 +1794,9 @@ class Bot:
             try:
                 if r["last_published_at"]:
                     last = datetime.fromisoformat(r["last_published_at"])
-                    if last.date() == local_now.date():
+
+                    if (last + offset).date() == local_now.date():
+
                         continue
                 hh, mm = map(int, r["post_time"].split(":"))
                 scheduled = datetime.combine(local_now.date(), datetime.min.time()).replace(hour=hh, minute=mm)

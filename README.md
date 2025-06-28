@@ -21,6 +21,9 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - Daily weather posts use images from a dedicated private channel selected with
   `/set_assets_channel`.
 
+- Forecast periods (morning/day/evening/night) are averaged from hourly data and
+  rounded to whole degrees for smoother values.
+
 
 ## Commands
 - /start - register or access bot
@@ -33,7 +36,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /channels - list channels (admin)
 - /scheduled - show scheduled posts with target channel names
 - /history - recent posts
-- /tz <offset> - set timezone offset (e.g., +02:00)
+- /tz <offset> - set timezone offset (e.g., +02:00). Affects daily weather schedules immediately
 - /addbutton <post_url> <text> <url> - add inline button to existing post (button text may contain spaces)
 - /delbutton <post_url> - remove all buttons from an existing post
 
