@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -373,6 +373,49 @@ async def test_night_clear_emoji(tmp_path):
     # last sendMessage should include moon emoji U+1F319
     assert "\U0001F319" in api_calls[-1][1]["text"]
 
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_add_sea_and_template(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    api_calls = []
+
+    async def dummy(method, data=None):
+        api_calls.append((method, data))
+        if method == "forwardMessage":
+            return {"ok": True, "result": {"message_id": 99, "text": "orig"}}
+        return {"ok": True, "result": {"message_id": 1}}
+
+    bot.api_request = dummy  # type: ignore
+
+    async def fetch_sea(lat, lon):
+        tomorrow = date.today() + timedelta(days=1)
+        times = [
+            datetime.utcnow().isoformat(),
+            datetime.combine(tomorrow, datetime.min.time()).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=6)).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=12)).isoformat(),
+            datetime.combine(tomorrow, datetime.min.time().replace(hour=18)).isoformat(),
+        ]
+        temps = [19.0, 20.0, 21.0, 22.0, 23.0]
+        return {"hourly": {"water_temperature": temps, "time": times}}
+
+    bot.fetch_open_meteo_sea = fetch_sea  # type: ignore
+
+    await bot.start()
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+    await bot.handle_update({"message": {"text": "/addsea Black 40 30", "from": {"id": 1}}})
+    cur = bot.db.execute("SELECT name FROM seas")
+    assert cur.fetchone()["name"] == "Black"
+
+    await bot.handle_update({"message": {"text": "/regweather https://t.me/c/1/1 {1|seatemperature}", "from": {"id": 1}}})
+    await bot.collect_sea()
+    assert any(c[0] == "editMessageText" for c in api_calls)
+    text = [c[1]["text"] for c in api_calls if c[0] == "editMessageText"][0]
+    assert "\U0001F30A" in text
 
     await bot.close()
 
