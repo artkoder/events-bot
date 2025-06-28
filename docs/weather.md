@@ -31,10 +31,12 @@ no further requests are made for that city until the next scheduled half hour.
 - `/cities` – list registered cities. Each entry has an inline *Delete* button that
   removes the city from the list. Coordinates are displayed with six decimal digits
   to reflect the stored precision.
+
 - `/seas` – list sea locations with inline *Delete* buttons.
 - `/addsea <name> <lat> <lon>` – add a sea location for water temperature checks.
   Coordinates may also be separated with a comma.
 - `/weather` – show the last collected weather for all cities and sea locations. Only superadmins may
+
 
   request this information. Append `now` to force a fresh API request for both
   weather and sea data before displaying results.

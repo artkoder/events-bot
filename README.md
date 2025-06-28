@@ -35,9 +35,11 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /delbutton <post_url> - remove all buttons from an existing post
 
 - /addcity <name> <lat> <lon> - add a city for weather checks (admin, coordinates
+
   may include six or more decimal places and may be separated with a comma)
 - /addsea <name> <lat> <lon> - add a sea location for water temperature checks
   (comma separator allowed)
+
 - /cities - list cities with inline delete buttons (admin). Coordinates are shown
   with six decimal places.
 - /seas - list sea locations with inline delete buttons (admin).
@@ -64,6 +66,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
 - **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
+
 
 
 
