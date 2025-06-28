@@ -44,6 +44,7 @@ async def test_weather_scheduler_publish(tmp_path):
     await bot.close()
 
 @pytest.mark.asyncio
+
 async def test_handle_asset_message(tmp_path):
     bot = Bot('dummy', str(tmp_path / 'db.sqlite'))
     bot.set_asset_channel(-100123)
@@ -53,6 +54,7 @@ async def test_handle_asset_message(tmp_path):
         'caption': '#котопогода #дождь cap'
     }
     await bot.handle_message(msg)
+
     a = bot.next_asset({'#дождь'})
     assert a['message_id'] == 10
     await bot.close()
@@ -79,3 +81,4 @@ async def test_template_russian_and_period(tmp_path):
     months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
     assert any(m in result for m in months)
     await bot.close()
+
