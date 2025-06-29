@@ -51,6 +51,7 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /seas - list sea locations with inline delete buttons (admin).
 - /weather [now] - show cached weather; append `now` to refresh data
 - /regweather <post_url> <template> - register a post for weather updates
+- /addweatherbutton <post_url> <text> [url] - attach a button linking to the latest forecast. Text supports the same placeholders as templates
 - /weatherposts [update] - list registered weather posts; append `update` to refresh
 - /setup_weather - interactive wizard to add a daily forecast channel
 - /list_weather_channels - show configured weather channels with action buttons
