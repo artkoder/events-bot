@@ -50,8 +50,10 @@ no further requests are made for that city until the next scheduled half hour.
 
   message already contains a weather header separated by `∙` it will be stripped
   when registering so only the original text remains.
+
  - `/addweatherbutton <post_url> <text> [url]` – add a button linking to the latest forecast. Button text supports the same placeholders as templates. Provide the URL manually if no forecast exists yet. Multiple weather buttons appear on the same row.
 - `/delbutton <post_url>` – remove all buttons from a post and delete any stored weather button data so they do not reappear.
+
 
 - `/weatherposts` – list registered weather posts. Append `update` to refresh all
   posts immediately. Each entry shows the post link followed by the rendered
