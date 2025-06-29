@@ -88,12 +88,14 @@ contains only fresh assets.
 - **US-5**: Post scheduling interface with channel selection, cancellation and rescheduling. Scheduled list shows the post preview or link along with the target channel name and time in HH:MM DD.MM.YYYY format.
 - **US-6**: Scheduler forwards queued posts at the correct local time. If forwarding fails because the bot is not a member, it falls back to copying. Interval is configurable and all actions are logged.
 - **US-8**: `/addbutton <post_url> <text> <url>` adds an inline button to an existing channel post. Update logged with INFO level.
-- **US-9**: `/delbutton <post_url>` removes inline buttons from an existing channel post.
+- **US-8.1**: `/addbutton` appends a new button without removing existing ones.
+- **US-9**: `/delbutton <post_url>` removes all inline buttons from an existing channel post.
 - **US-10**: Admin adds a city with `/addcity`.
 - **US-11**: Admin views and removes cities with `/cities`.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
+- **US-14.1**: `/addweatherbutton <post_url> <text> [url]` attaches a button linking to the latest `#котопогода`. `/weatherposts` lists these posts with a remove option.
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
 - **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
 - **US-17**: Admin adds a channel for daily weather posts and specifies the publication time with `/setup_weather`.
