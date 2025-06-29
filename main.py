@@ -151,7 +151,7 @@ CREATE_TABLES = [
         )""",
 
 
-    """CREATE TABLE IF NOT EXISTS weather_cache_period (
+        """CREATE TABLE IF NOT EXISTS weather_cache_period (
             city_id INTEGER PRIMARY KEY,
             updated TEXT,
             morning_temp REAL,
@@ -166,6 +166,20 @@ CREATE_TABLES = [
             night_temp REAL,
             night_code INTEGER,
             night_wind REAL
+        )""",
+
+    """CREATE TABLE IF NOT EXISTS latest_weather_post (
+            chat_id BIGINT,
+            message_id BIGINT,
+            published_at TEXT
+        )""",
+
+    """CREATE TABLE IF NOT EXISTS weather_link_posts (
+            chat_id BIGINT NOT NULL,
+            message_id BIGINT NOT NULL,
+            base_markup TEXT,
+            button_texts TEXT,
+            UNIQUE(chat_id, message_id)
         )""",
 
 ]
@@ -834,6 +848,48 @@ class Bot:
                     "Failed to update weather post %s: %s", r["id"], resp
                 )
 
+    def latest_weather_url(self) -> str | None:
+        cur = self.db.execute(
+            "SELECT chat_id, message_id FROM latest_weather_post LIMIT 1"
+        )
+        row = cur.fetchone()
+        if row:
+            return self.post_url(row["chat_id"], row["message_id"])
+        return None
+
+    def set_latest_weather_post(self, chat_id: int, message_id: int):
+        self.db.execute("DELETE FROM latest_weather_post")
+        self.db.execute(
+            "INSERT INTO latest_weather_post (chat_id, message_id, published_at) VALUES (?, ?, ?)",
+            (chat_id, message_id, datetime.utcnow().isoformat()),
+        )
+        self.db.commit()
+
+    async def update_weather_buttons(self):
+        url = self.latest_weather_url()
+        if not url:
+            return
+        cur = self.db.execute(
+            "SELECT chat_id, message_id, base_markup, button_texts FROM weather_link_posts"
+        )
+        for r in cur.fetchall():
+            base = json.loads(r["base_markup"]) if r["base_markup"] else {"inline_keyboard": []}
+            buttons = base.get("inline_keyboard", [])
+            weather_buttons = []
+            for t in json.loads(r["button_texts"]):
+                rendered = self._render_template(t) or t
+                weather_buttons.append({"text": rendered, "url": url})
+            if weather_buttons:
+                buttons.append(weather_buttons)
+            await self.api_request(
+                "editMessageReplyMarkup",
+                {
+                    "chat_id": r["chat_id"],
+                    "message_id": r["message_id"],
+                    "reply_markup": {"inline_keyboard": buttons},
+                },
+            )
+
     def add_weather_channel(self, channel_id: int, post_time: str):
         self.db.execute(
             "INSERT OR REPLACE INTO weather_publish_channels (channel_id, post_time) VALUES (?, ?)",
@@ -988,12 +1044,16 @@ class Bot:
             return False
 
         if ok and record:
-
             self.db.execute(
                 "UPDATE weather_publish_channels SET last_published_at=? WHERE channel_id=?",
                 (datetime.utcnow().isoformat(), channel_id),
             )
             self.db.commit()
+            if resp.get("result"):
+                mid = resp["result"].get("message_id")
+                if mid:
+                    self.set_latest_weather_post(channel_id, mid)
+                    await self.update_weather_buttons()
         else:
             logging.error("Failed to publish weather: %s", resp)
         return ok
@@ -1273,7 +1333,6 @@ class Bot:
 
             parts = text.split()
             if len(parts) < 4:
-
                 await self.api_request('sendMessage', {
                     'chat_id': user_id,
                     'text': 'Usage: /addbutton <post_url> <text> <url>'
@@ -1284,9 +1343,19 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid post URL'})
                 return
             chat_id, msg_id = parsed
-
             keyboard_text = " ".join(parts[2:-1])
-            keyboard = {'inline_keyboard': [[{'text': keyboard_text, 'url': parts[-1]}]]}
+            fwd = await self.api_request('forwardMessage', {
+                'chat_id': user_id,
+                'from_chat_id': chat_id,
+                'message_id': msg_id
+            })
+            markup = None
+            if fwd.get('ok'):
+                markup = fwd['result'].get('reply_markup')
+                await self.api_request('deleteMessage', {'chat_id': user_id, 'message_id': fwd['result']['message_id']})
+            buttons = markup.get('inline_keyboard', []) if markup else []
+            buttons.append([{'text': keyboard_text, 'url': parts[-1]}])
+            keyboard = {'inline_keyboard': buttons}
 
             resp = await self.api_request('editMessageReplyMarkup', {
                 'chat_id': chat_id,
@@ -1326,10 +1395,91 @@ class Bot:
             })
             if resp.get('ok'):
                 logging.info('Removed buttons from message %s', msg_id)
+                self.db.execute(
+                    'DELETE FROM weather_link_posts WHERE chat_id=? AND message_id=?',
+                    (chat_id, msg_id),
+                )
+                self.db.commit()
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Button removed'})
             else:
                 logging.error('Failed to remove button from %s: %s', msg_id, resp)
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to remove button'})
+            return
+
+        if text.startswith('/addweatherbutton') and self.is_superadmin(user_id):
+            parts = text.split()
+            if len(parts) < 3:
+                await self.api_request(
+                    'sendMessage',
+                    {
+                        'chat_id': user_id,
+                        'text': 'Usage: /addweatherbutton <post_url> <text> [url]'
+                    },
+                )
+                return
+
+            url = None
+            if len(parts) > 3:
+                url = parts[-1]
+                btn_text = " ".join(parts[2:-1])
+            else:
+                btn_text = " ".join(parts[2:])
+                url = self.latest_weather_url()
+                if not url:
+                    await self.api_request(
+                        'sendMessage',
+                        {
+                            'chat_id': user_id,
+                            'text': 'Specify forecast URL after text'
+                        },
+                    )
+                    return
+
+            parsed = await self.parse_post_url(parts[1])
+            if not parsed:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Invalid post URL'})
+                return
+            chat_id, msg_id = parsed
+            fwd = await self.api_request(
+                'forwardMessage',
+                {'chat_id': user_id, 'from_chat_id': chat_id, 'message_id': msg_id},
+            )
+            markup = None
+            if fwd.get('ok'):
+                markup = fwd['result'].get('reply_markup')
+                await self.api_request('deleteMessage', {'chat_id': user_id, 'message_id': fwd['result']['message_id']})
+
+            row = self.db.execute(
+                'SELECT base_markup, button_texts FROM weather_link_posts WHERE chat_id=? AND message_id=?',
+                (chat_id, msg_id),
+            ).fetchone()
+            base_markup = row['base_markup'] if row else json.dumps(markup) if markup else None
+            texts = json.loads(row['button_texts']) if row else []
+            if row is None:
+                base_buttons = markup.get('inline_keyboard', []) if markup else []
+            else:
+                base_buttons = json.loads(base_markup)['inline_keyboard'] if base_markup else []
+            texts.append(btn_text)
+            rendered_texts = [self._render_template(t) or t for t in texts]
+            weather_buttons = [{'text': t, 'url': url} for t in rendered_texts]
+            keyboard_buttons = base_buttons + [weather_buttons]
+            resp = await self.api_request(
+                'editMessageReplyMarkup',
+                {
+                    'chat_id': chat_id,
+                    'message_id': msg_id,
+                    'reply_markup': {'inline_keyboard': keyboard_buttons},
+                },
+            )
+            if resp.get('ok'):
+                self.db.execute(
+                    'INSERT OR REPLACE INTO weather_link_posts (chat_id, message_id, base_markup, button_texts) VALUES (?, ?, ?, ?)',
+                    (chat_id, msg_id, base_markup, json.dumps(texts)),
+                )
+                self.db.commit()
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Weather button added'})
+            else:
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Failed to add weather button'})
             return
 
         if text.startswith('/addcity') and self.is_superadmin(user_id):
@@ -1407,22 +1557,38 @@ class Bot:
             force = len(parts) > 1 and parts[1] == 'update'
             if force:
                 await self.update_weather_posts()
+                await self.update_weather_buttons()
             cur = self.db.execute(
                 'SELECT chat_id, message_id, template FROM weather_posts ORDER BY id'
             )
             rows = cur.fetchall()
-            if not rows:
+            if rows:
+                lines = []
+                for r in rows:
+                    header = self._render_template(r['template'])
+                    url = self.post_url(r['chat_id'], r['message_id'])
+                    if header:
+                        lines.append(f"{url} {header}")
+                    else:
+                        lines.append(f"{url} no data")
+                await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
+            cur = self.db.execute('SELECT chat_id, message_id, button_texts FROM weather_link_posts ORDER BY rowid')
+            rows = cur.fetchall()
+            if not rows and not lines:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather posts'})
                 return
-            lines = []
             for r in rows:
-                header = self._render_template(r['template'])
-                url = self.post_url(r['chat_id'], r['message_id'])
-                if header:
-                    lines.append(f"{url} {header}")
-                else:
-                    lines.append(f"{url} no data")
-            await self.api_request('sendMessage', {'chat_id': user_id, 'text': '\n'.join(lines)})
+                rendered = [self._render_template(t) or t for t in json.loads(r['button_texts'])]
+                texts = ', '.join(rendered)
+                keyboard = {'inline_keyboard': [[{'text': 'Remove buttons', 'callback_data': f'wbtn_del:{r["chat_id"]}:{r["message_id"]}'}]]}
+                await self.api_request(
+                    'sendMessage',
+                    {
+                        'chat_id': user_id,
+                        'text': f"{self.post_url(r['chat_id'], r['message_id'])} buttons: {texts}",
+                        'reply_markup': keyboard,
+                    },
+                )
             return
 
         if text.startswith('/setup_weather') and self.is_superadmin(user_id):
@@ -1725,6 +1891,29 @@ class Bot:
             cid = int(data.split(':')[1])
             self.remove_weather_channel(cid)
             await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Channel removed'})
+        elif data.startswith('wbtn_del:') and self.is_superadmin(user_id):
+            _, cid, mid = data.split(':')
+            chat_id = int(cid)
+            msg_id = int(mid)
+            row = self.db.execute(
+                'SELECT base_markup FROM weather_link_posts WHERE chat_id=? AND message_id=?',
+                (chat_id, msg_id),
+            ).fetchone()
+            markup = json.loads(row['base_markup']) if row and row['base_markup'] else {}
+            await self.api_request(
+                'editMessageReplyMarkup',
+                {
+                    'chat_id': chat_id,
+                    'message_id': msg_id,
+                    'reply_markup': markup,
+                },
+            )
+            self.db.execute(
+                'DELETE FROM weather_link_posts WHERE chat_id=? AND message_id=?',
+                (chat_id, msg_id),
+            )
+            self.db.commit()
+            await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Weather buttons removed'})
         elif data.startswith('approve:') and self.is_superadmin(user_id):
             uid = int(data.split(':')[1])
             if self.approve_user(uid):
