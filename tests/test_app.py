@@ -414,7 +414,6 @@ async def test_add_weather_button(tmp_path):
     )
     bot.db.commit()
 
-
     await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
 
     await bot.handle_update({
@@ -436,6 +435,58 @@ async def test_add_weather_button(tmp_path):
     await bot.update_weather_buttons()
     up_payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
     assert "\u00B0C" in up_payload["reply_markup"]["inline_keyboard"][0][0]["text"]
+
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_delbutton_clears_weather_record(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    calls = []
+
+    async def dummy(method, data=None):
+        calls.append((method, data))
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {"message_id": 5, "reply_markup": {"inline_keyboard": []}},
+            }
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+    bot.set_latest_weather_post(-100, 7)
+    await bot.start()
+
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'c', 0, 0)")
+    bot.db.execute(
+        "INSERT INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed, is_day) VALUES (1, ?, 15.0, 1, 3, 1)",
+        (datetime.utcnow().isoformat(),),
+    )
+    bot.db.commit()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update({
+        "message": {
+            "text": "/addweatherbutton https://t.me/c/123/5 K. {1|temperature}",
+            "from": {"id": 1},
+        }
+    })
+
+    assert bot.db.execute("SELECT COUNT(*) FROM weather_link_posts").fetchone()[0] == 1
+
+    await bot.handle_update({
+        "message": {
+            "text": "/delbutton https://t.me/c/123/5",
+            "from": {"id": 1},
+        }
+    })
+
+    assert bot.db.execute("SELECT COUNT(*) FROM weather_link_posts").fetchone()[0] == 0
+    assert calls[-1][0] == "editMessageReplyMarkup"
+    assert calls[-1][1]["reply_markup"] == {}
 
 
     await bot.close()

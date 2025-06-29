@@ -1394,6 +1394,11 @@ class Bot:
             })
             if resp.get('ok'):
                 logging.info('Removed buttons from message %s', msg_id)
+                self.db.execute(
+                    'DELETE FROM weather_link_posts WHERE chat_id=? AND message_id=?',
+                    (chat_id, msg_id),
+                )
+                self.db.commit()
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'Button removed'})
             else:
                 logging.error('Failed to remove button from %s: %s', msg_id, resp)
