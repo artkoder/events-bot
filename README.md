@@ -90,7 +90,9 @@ contains only fresh assets.
 - **US-6**: Scheduler forwards queued posts at the correct local time. If forwarding fails because the bot is not a member, it falls back to copying. Interval is configurable and all actions are logged.
 - **US-8**: `/addbutton <post_url> <text> <url>` adds an inline button to an existing channel post. Update logged with INFO level.
 - **US-8.1**: `/addbutton` appends a new button without removing existing ones.
+
 - **US-9**: `/delbutton <post_url>` removes all inline buttons from an existing channel post and deletes stored weather button data.
+
 - **US-10**: Admin adds a city with `/addcity`.
 - **US-11**: Admin views and removes cities with `/cities`.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.

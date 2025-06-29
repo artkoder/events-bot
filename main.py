@@ -876,8 +876,10 @@ class Bot:
             base = json.loads(r["base_markup"]) if r["base_markup"] else {"inline_keyboard": []}
             buttons = base.get("inline_keyboard", [])
             for t in json.loads(r["button_texts"]):
+
                 rendered = self._render_template(t) or t
                 buttons.append([{"text": rendered, "url": url}])
+
             await self.api_request(
                 "editMessageReplyMarkup",
                 {
@@ -1457,8 +1459,10 @@ class Bot:
             else:
                 base_buttons = json.loads(base_markup)['inline_keyboard'] if base_markup else []
             texts.append(btn_text)
+
             rendered_texts = [self._render_template(t) or t for t in texts]
             keyboard_buttons = base_buttons + [[{'text': t, 'url': url}] for t in rendered_texts]
+
             resp = await self.api_request(
                 'editMessageReplyMarkup',
                 {
@@ -1574,8 +1578,10 @@ class Bot:
                 await self.api_request('sendMessage', {'chat_id': user_id, 'text': 'No weather posts'})
                 return
             for r in rows:
+
                 rendered = [self._render_template(t) or t for t in json.loads(r['button_texts'])]
                 texts = ', '.join(rendered)
+
                 keyboard = {'inline_keyboard': [[{'text': 'Remove buttons', 'callback_data': f'wbtn_del:{r["chat_id"]}:{r["message_id"]}'}]]}
                 await self.api_request(
                     'sendMessage',
