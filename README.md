@@ -51,7 +51,9 @@ This bot allows authorized users to schedule posts to their Telegram channels.
 - /seas - list sea locations with inline delete buttons (admin).
 - /weather [now] - show cached weather; append `now` to refresh data
 - /regweather <post_url> <template> - register a post for weather updates
-- /addweatherbutton <post_url> <text> [url] - attach a button linking to the latest forecast. Text supports the same placeholders as templates
+
+ - /addweatherbutton <post_url> <text> [url] - attach a button linking to the latest forecast. Text supports the same placeholders as templates. Multiple weather buttons share one row
+
 - /weatherposts [update] - list registered weather posts; append `update` to refresh
 - /setup_weather - interactive wizard to add a daily forecast channel
 - /list_weather_channels - show configured weather channels with action buttons
@@ -98,7 +100,9 @@ contains only fresh assets.
 - **US-12**: Periodic weather collection from Open-Meteo with up to three retries on failure.
 - **US-13**: Admin requests last weather check info and can force an update.
 - **US-14**: Admin registers a weather post for updates, including sea temperature.
-- **US-14.1**: `/addweatherbutton <post_url> <text> [url]` attaches a button linking to the latest `#котопогода`. `/weatherposts` lists these posts with a remove option.
+
+ - **US-14.1**: `/addweatherbutton <post_url> <text> [url]` attaches a button linking to the latest `#котопогода`. Multiple weather buttons are placed on one row. `/weatherposts` lists these posts with a remove option.
+
 - **US-15**: Automatic weather post updates with current weather and sea temperature.
 - **US-16**: Admin lists registered posts showing the rendered weather and sea data for all registered seas.
 - **US-17**: Admin adds a channel for daily weather posts and specifies the publication time with `/setup_weather`.

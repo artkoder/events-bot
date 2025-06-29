@@ -427,6 +427,8 @@ async def test_add_weather_button(tmp_path):
 
     assert any(c[0] == "editMessageReplyMarkup" for c in calls)
     payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
+
+    assert len(payload["reply_markup"]["inline_keyboard"]) == 1
     assert payload["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("/7")
 
     assert "\u00B0C" in payload["reply_markup"]["inline_keyboard"][0][0]["text"]
@@ -434,6 +436,8 @@ async def test_add_weather_button(tmp_path):
     calls.clear()
     await bot.update_weather_buttons()
     up_payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
+
+    assert len(up_payload["reply_markup"]["inline_keyboard"]) == 1
     assert "\u00B0C" in up_payload["reply_markup"]["inline_keyboard"][0][0]["text"]
 
 
@@ -487,6 +491,61 @@ async def test_delbutton_clears_weather_record(tmp_path):
     assert bot.db.execute("SELECT COUNT(*) FROM weather_link_posts").fetchone()[0] == 0
     assert calls[-1][0] == "editMessageReplyMarkup"
     assert calls[-1][1]["reply_markup"] == {}
+
+
+    await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_multiple_weather_buttons_same_row(tmp_path):
+    bot = Bot("dummy", str(tmp_path / "db.sqlite"))
+
+    calls = []
+
+    async def dummy(method, data=None):
+        calls.append((method, data))
+        if method == "forwardMessage":
+            return {
+                "ok": True,
+                "result": {"message_id": 5, "reply_markup": {"inline_keyboard": []}},
+            }
+        return {"ok": True}
+
+    bot.api_request = dummy  # type: ignore
+    bot.set_latest_weather_post(-100, 7)
+    await bot.start()
+
+    bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'c', 0, 0)")
+    bot.db.execute(
+        "INSERT INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed, is_day) VALUES (1, ?, 15.0, 1, 3, 1)",
+        (datetime.utcnow().isoformat(),),
+    )
+    bot.db.commit()
+
+    await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
+
+    await bot.handle_update(
+        {
+            "message": {
+                "text": "/addweatherbutton https://t.me/c/123/5 A {1|temperature}",
+                "from": {"id": 1},
+            }
+        }
+    )
+
+    calls.clear()
+    await bot.handle_update(
+        {
+            "message": {
+                "text": "/addweatherbutton https://t.me/c/123/5 B {1|temperature}",
+                "from": {"id": 1},
+            }
+        }
+    )
+
+    payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
+    assert len(payload["reply_markup"]["inline_keyboard"]) == 1
+    assert len(payload["reply_markup"]["inline_keyboard"][0]) == 2
 
 
     await bot.close()

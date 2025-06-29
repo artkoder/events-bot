@@ -875,10 +875,13 @@ class Bot:
         for r in cur.fetchall():
             base = json.loads(r["base_markup"]) if r["base_markup"] else {"inline_keyboard": []}
             buttons = base.get("inline_keyboard", [])
-            for t in json.loads(r["button_texts"]):
 
+            weather_buttons = []
+            for t in json.loads(r["button_texts"]):
                 rendered = self._render_template(t) or t
-                buttons.append([{"text": rendered, "url": url}])
+                weather_buttons.append({"text": rendered, "url": url})
+            if weather_buttons:
+                buttons.append(weather_buttons)
 
             await self.api_request(
                 "editMessageReplyMarkup",
@@ -1461,7 +1464,8 @@ class Bot:
             texts.append(btn_text)
 
             rendered_texts = [self._render_template(t) or t for t in texts]
-            keyboard_buttons = base_buttons + [[{'text': t, 'url': url}] for t in rendered_texts]
+            weather_buttons = [{'text': t, 'url': url} for t in rendered_texts]
+            keyboard_buttons = base_buttons + [weather_buttons]
 
             resp = await self.api_request(
                 'editMessageReplyMarkup',
