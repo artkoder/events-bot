@@ -406,6 +406,7 @@ async def test_add_weather_button(tmp_path):
     bot.set_latest_weather_post(-100, 7)
     await bot.start()
 
+
     bot.db.execute("INSERT INTO cities (id, name, lat, lon) VALUES (1, 'c', 0, 0)")
     bot.db.execute(
         "INSERT INTO weather_cache_hour (city_id, timestamp, temperature, weather_code, wind_speed, is_day) VALUES (1, ?, 15.0, 1, 3, 1)",
@@ -413,11 +414,14 @@ async def test_add_weather_button(tmp_path):
     )
     bot.db.commit()
 
+
     await bot.handle_update({"message": {"text": "/start", "from": {"id": 1}}})
 
     await bot.handle_update({
         "message": {
+
             "text": "/addweatherbutton https://t.me/c/123/5 K. {1|temperature}",
+
             "from": {"id": 1},
         }
     })
@@ -425,11 +429,13 @@ async def test_add_weather_button(tmp_path):
     assert any(c[0] == "editMessageReplyMarkup" for c in calls)
     payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
     assert payload["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("/7")
+
     assert "\u00B0C" in payload["reply_markup"]["inline_keyboard"][0][0]["text"]
 
     calls.clear()
     await bot.update_weather_buttons()
     up_payload = [c[1] for c in calls if c[0] == "editMessageReplyMarkup"][0]
     assert "\u00B0C" in up_payload["reply_markup"]["inline_keyboard"][0][0]["text"]
+
 
     await bot.close()
