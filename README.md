@@ -127,6 +127,9 @@ For Telegram to reach the webhook over HTTPS, the Fly.io service must expose por
 - `TELEGRAM_BOT_TOKEN` – Telegram bot API token.
 
 - `WEBHOOK_URL` – external HTTPS URL of the deployed application. Used to register the Telegram webhook.
+  The host **must** resolve to an IPv4 address, otherwise Telegram will reject
+  the webhook. On Fly.io allocate an IPv4 with `fly ips allocate-v4` and use the
+  resulting address or domain.
 
 - `DB_PATH` – path to the SQLite database (default `bot.db`).
 - `FLY_API_TOKEN` – token for automated Fly deployments.
@@ -165,6 +168,15 @@ fly volumes create sched_db --size 1
 fly secrets set TELEGRAM_BOT_TOKEN=xxx
 fly secrets set WEBHOOK_URL=https://<app-name>.fly.dev/
 ```
+
+If you see a Telegram error about "IPv6-only addresses are not allowed",
+allocate an IPv4 address for the app:
+
+```bash
+fly ips allocate-v4
+```
+
+Then update `WEBHOOK_URL` to use the new IPv4 address or domain.
 
 The `fly.toml` file should expose port `443` so that Telegram can connect over HTTPS.
 
