@@ -6,6 +6,8 @@ import sqlite3
 from datetime import datetime, date, timedelta, timezone
 import contextlib
 import re
+import socket
+from urllib.parse import urlparse
 
 from aiohttp import web, ClientSession
 
@@ -2102,8 +2104,24 @@ class Bot:
             pass
 
 
+def url_has_ipv4(url: str) -> bool:
+    """Return True if the hostname in ``url`` resolves to an IPv4 address."""
+    hostname = urlparse(url).hostname
+    if not hostname:
+        return False
+    try:
+        socket.getaddrinfo(hostname, None, socket.AF_INET)
+        return True
+    except socket.gaierror:
+        return False
+
+
 async def ensure_webhook(bot: Bot, base_url: str):
     expected = base_url.rstrip('/') + '/webhook'
+    if not url_has_ipv4(expected):
+        raise RuntimeError(
+            f"Webhook URL {expected} resolves to IPv6 only. Telegram requires an IPv4 address"
+        )
     info = await bot.api_request('getWebhookInfo')
     current = info.get('result', {}).get('url')
     if current != expected:
